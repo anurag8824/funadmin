@@ -43,7 +43,7 @@ export default function Login() {
   };
 
   const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault(); // optional chaining use kiya
+    e?.preventDefault();
     if (!email || !password) {
       let errorObj: any = {};
       if (!email) errorObj = { ...errorObj, email: "Email Is Required !" };

@@ -312,7 +312,7 @@ const Dashboard = (props) => {
   const CustomeCard = ({ link, title, count, icon }) => {
     return (
       <div
-        className="col-xl-3 col-sm-6 col-12 cursor-pointer"
+        className="col-xl-12 col-sm-6 col-12 cursor-pointer"
         onClick={() => router.push(link)}
       >
         <div className="card">
