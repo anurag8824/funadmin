@@ -1,9 +1,6 @@
 /node_modules
 /uploads/*
+# Ignore all environment files
 .env
-/.env
-env
-.env 
-/env
-/.env
-env
+.env.*
+!.env.example   # Optional: If you want to keep a sample .env file, you can include it
