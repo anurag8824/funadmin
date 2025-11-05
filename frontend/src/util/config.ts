@@ -1,6 +1,6 @@
 import { ok } from "assert";
 
-export const baseURL: string = "http://localhost:8000/"; // backend ka url
+export const baseURL: string = "https://api.funtaap.com/"; // backend ka url
 export const secretKey : string = "3845y63bsdjfg";
 export const projectName: string = "";    
 
