@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Environment & secrets (never commit)
+.env
+.env.*
+!.env.example
+.env*.local
+
+# Next.js
+.next/
+out/
+build/
+
+# Testing
+coverage/
+
+# Production / Vercel
+.vercel
+
+# Misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+next-env.d.ts
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

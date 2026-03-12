@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Uploaded files (do not commit)
+uploads/*
+!uploads/.gitkeep
+
+# Environment & secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# Firebase (do not commit)
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
+# Logs
+*.log
+logs/
