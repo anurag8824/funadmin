@@ -23,6 +23,8 @@ const postSchema = new mongoose.Schema(
 
     shareCount: { type: Number, default: 0 }, //when user share the post then shareCount increased
     isFake: { type: Boolean, default: false },
+
+    savedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", default: [] }],
   },
   {
     timestamps: true,

@@ -29,8 +29,10 @@ const banner = require("./banner.route");
 const chatRequest = require("./chatRequest.route");
 const reaction = require("./reaction.route");
 const story = require("./story.route");
+const storyFeed = require("./storyFeed.route");
 const storyView = require("./storyView.route");
 const file = require("./file.route");
+const save = require("./save.route");
 const audioCall = require("./audioCall.route");
 
 //exports client's route.js
@@ -60,8 +62,10 @@ route.use("/banner", banner);
 route.use("/chatRequest", chatRequest);
 route.use("/reaction", reaction);
 route.use("/story", story);
+route.use("/storyFeed", storyFeed);
 route.use("/storyView", storyView);
 route.use("/file", file);
+route.use("/save", save);
 route.use("/audioCall", audioCall);
 
 module.exports = route;

@@ -519,6 +519,13 @@ exports.getAllPosts = async (req, res) => {
                 else: false,
               },
             },
+            isSaved: {
+              $cond: {
+                if: { $in: [userId, { $ifNull: ["$savedBy", []] }] },
+                then: true,
+                else: false,
+              },
+            },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
             time: {
@@ -817,6 +824,13 @@ exports.getAllPosts = async (req, res) => {
             isFollow: {
               $cond: {
                 if: { $gt: [{ $size: "$isFollow" }, 0] },
+                then: true,
+                else: false,
+              },
+            },
+            isSaved: {
+              $cond: {
+                if: { $in: [userId, { $ifNull: ["$savedBy", []] }] },
                 then: true,
                 else: false,
               },
@@ -1530,6 +1544,13 @@ exports.retrieveAllPosts = async (req, res, next) => {
                 else: false,
               },
             },
+            isSaved: {
+              $cond: {
+                if: { $in: [userId, { $ifNull: ["$savedBy", []] }] },
+                then: true,
+                else: false,
+              },
+            },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
             time: {
@@ -1690,6 +1711,7 @@ exports.retrieveAllPosts = async (req, res, next) => {
             },
             isLike: false,
             isFollow: false,
+            isSaved: false,
           },
         },
         {
@@ -1743,6 +1765,7 @@ exports.retrieveAllPosts = async (req, res, next) => {
             isFake: 1,
             isLike: 1,
             isFollow: 1,
+            isSaved: 1,
             createdAt: 1,
             userId: "$user._id",
             isProfileImageBanned: "$user.isProfileImageBanned",

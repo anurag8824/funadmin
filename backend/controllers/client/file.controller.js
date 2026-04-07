@@ -129,16 +129,20 @@ exports.uploadMultipleContent = async (req, res) => {
       return res.status(200).json({ status: false, message: "Oops! Invalid folder structure." });
     }
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(200).json({ status: false, message: "Please upload valid files." });
+
+    const files = req.files || (req.file ? [req.file] : []);
+    console.log("req.file:", req.file, "req.files:", req.files);
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ status: false, message: "Please upload valid files." });
     }
 
-    console.log("Multiple Upload started for app side .......", req.files);
+    console.log("Multiple Upload started for app side .......", files);
 
     const activeStorage = await getActiveStorage();
     const folderStructure = req.body?.folderStructure;
 
-    const uploadedFiles = req.files.map((file) => {
+    const uploadedFiles = files.map((file) => {
       let fileUrl = "";
 
       if (activeStorage === "local") {

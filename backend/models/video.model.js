@@ -22,6 +22,8 @@ const videoSchema = new mongoose.Schema(
     shareCount: { type: Number, default: 0 }, //when user share the video then shareCount increased
     isFake: { type: Boolean, default: false },
     isBanned: { type: Boolean, default: false },
+
+    savedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", default: [] }],
   },
   {
     timestamps: true,

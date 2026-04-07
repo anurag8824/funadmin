@@ -87,11 +87,6 @@ exports.uploadStory = async (req, res) => {
       return res.status(200).json({ status: false, message: "Background song not found." });
     }
 
-    res.status(200).json({
-      status: true,
-      message: "Story has been uploaded successfully.",
-    });
-
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Story expires in 24 hours
     const storyData = {
       user: user._id,
@@ -108,6 +103,11 @@ exports.uploadStory = async (req, res) => {
 
     const story = new Story(storyData);
     await story.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Story has been uploaded successfully.",
+    });
   } catch (error) {
     console.error("Error uploading story:", error);
 
@@ -130,7 +130,8 @@ exports.uploadStory = async (req, res) => {
 //view story
 exports.viewStory = async (req, res) => {
   try {
-    const { userId, storyId } = req.query;
+    const userId = req.body?.userId ?? req.query.userId;
+    const storyId = req.body?.storyId ?? req.query.storyId;
 
     if (!userId || !storyId) {
       return res.status(200).json({
@@ -197,7 +198,9 @@ exports.viewStory = async (req, res) => {
 //reaction story
 exports.reactToStory = async (req, res) => {
   try {
-    const { userId, storyId, reaction } = req.body;
+    const userId = req.body?.userId ?? req.query.userId;
+    const storyId = req.body?.storyId ?? req.query.storyId;
+    const reaction = req.body?.reaction;
 
     if (!userId || !storyId || !reaction) {
       return res.status(200).json({ status: false, message: "userId, storyId, and reaction are required." });
@@ -381,7 +384,9 @@ exports.reactToStory = async (req, res) => {
 //reply story
 exports.replyToStory = async (req, res) => {
   try {
-    const { userId, storyId, message } = req.body;
+    const userId = req.body?.userId ?? req.query.userId;
+    const storyId = req.body?.storyId ?? req.query.storyId;
+    const message = req.body?.message;
 
     if (!userId || !storyId || !message) {
       return res.status(200).json({ status: false, message: "userId, storyId, and message are required." });
@@ -934,14 +939,14 @@ exports.getFollowedUserStories = async (req, res) => {
       },
     ];
 
-    const [realStories, fakeStories] = await Promise.all([Story.aggregate(realStoriesPipeline), settingJSON?.isFakeData ? Story.aggregate(fakeStoriesPipeline) : []]);
+    const [realStories] = await Promise.all([Story.aggregate(realStoriesPipeline)]);
 
-    const combinedStories = [...realStories, ...fakeStories];
+    console.log("[getFollowedUserStories] viewer userId:", userId, "groups:", realStories.length, "authorIds:", realStories.map((g) => g.user?._id));
 
     return res.status(200).json({
       status: true,
       message: "Stories from followed users fetched successfully.",
-      storyGroup: combinedStories,
+      storyGroup: realStories,
     });
   } catch (error) {
     console.error("Error fetching stories:", error);
@@ -1016,6 +1021,8 @@ exports.getOwnStories = async (req, res) => {
         },
       },
     ]);
+
+    console.log("[getOwnStories] userId:", userId, "storyCount:", stories.length, "ids:", stories.map((s) => s._id));
 
     return res.status(200).json({
       status: true,

@@ -681,6 +681,7 @@ exports.videosOfUser = async (req, res, next) => {
         {
           $addFields: {
             isLike: { $cond: { if: { $gt: [{ $size: "$likes" }, 0] }, then: true, else: false } },
+            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$comments" },
             totalViews: { $size: "$views" },
@@ -706,6 +707,7 @@ exports.videosOfUser = async (req, res, next) => {
             singerName: "$song.singerName",
 
             isLike: 1,
+            isSaved: 1,
             totalLikes: 1,
             totalComments: 1,
             totalViews: 1,
@@ -883,6 +885,7 @@ exports.getAllVideos = async (req, res, next) => {
             isVerified: "$user.isVerified",
             isLike: { $cond: { if: { $gt: [{ $size: "$likeHistory" }, 0] }, then: true, else: false } },
             isFollow: { $cond: { if: { $gt: [{ $size: "$isFollow" }, 0] }, then: true, else: false } },
+            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
             time: {
@@ -1114,6 +1117,7 @@ exports.getAllVideos = async (req, res, next) => {
             isProfileImageBanned: "$user.isProfileImageBanned",
             isLike: { $cond: { if: { $gt: [{ $size: "$likeHistory" }, 0] }, then: true, else: false } },
             isFollow: { $cond: { if: { $gt: [{ $size: "$isFollow" }, 0] }, then: true, else: false } },
+            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
             time: {
@@ -1497,6 +1501,7 @@ exports.fetchVideosOfParticularSong = async (req, res) => {
         {
           $addFields: {
             isLike: { $cond: { if: { $gt: [{ $size: "$likes" }, 0] }, then: true, else: false } },
+            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$comments" },
             totalViews: { $size: "$views" },
@@ -1509,6 +1514,7 @@ exports.fetchVideosOfParticularSong = async (req, res) => {
             caption: 1,
             isBanned: 1,
             isLike: 1,
+            isSaved: 1,
             totalLikes: 1,
             totalComments: 1,
             totalViews: 1,
@@ -1642,6 +1648,7 @@ exports.fetchUserVideos = async (req, res, next) => {
           {
             $addFields: {
               isLike: { $cond: { if: { $gt: [{ $size: "$likes" }, 0] }, then: true, else: false } },
+              isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
               totalLikes: { $size: "$totalLikes" },
               totalComments: { $size: "$comments" },
               totalViews: { $size: "$views" },
@@ -1668,6 +1675,7 @@ exports.fetchUserVideos = async (req, res, next) => {
               singerName: "$song.singerName",
 
               isLike: 1,
+              isSaved: 1,
               totalLikes: 1,
               totalComments: 1,
               totalViews: 1,
@@ -1960,6 +1968,7 @@ exports.getVideoLibrary = async (req, res, next) => {
             isProfileImageBanned: "$user.isProfileImageBanned",
             isLike: { $cond: { if: { $gt: [{ $size: "$likeHistory" }, 0] }, then: true, else: false } },
             isFollow: { $cond: { if: { $gt: [{ $size: "$isFollow" }, 0] }, then: true, else: false } },
+            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
             time: {
@@ -2289,6 +2298,7 @@ exports.getVideoById = async (req, res) => {
             userImage: "$user.image",
             isVerified: "$user.isVerified",
             isLike: { $cond: { if: { $gt: [{ $size: "$likeHistory" }, 0] }, then: true, else: false } },
+            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikesArr" },
             totalComments: { $size: "$commentsArr" },
           },
