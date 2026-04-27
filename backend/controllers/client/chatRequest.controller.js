@@ -229,11 +229,14 @@ exports.handleMessageRequest = async (req, res) => {
         ],
       });
 
+      if (!foundChatTopic) {
+        return;
+      }
       foundChatTopic.isAccepted = true;
 
       await Promise.all([
         foundChatTopic?.save(),
-        Chat.updateMany({ isRead: false }, { $set: { isRead: true } }),
+        Chat.updateMany({ chatTopicId: foundChatTopic._id, isRead: false }, { $set: { isRead: true } }),
         ChatRequest.deleteMany({ chatRequestTopicId: chatRequestTopicId }),
         ChatRequestTopic.findOneAndDelete({ _id: chatRequestTopicId }),
       ]);
@@ -298,7 +301,10 @@ exports.handleMessageRequest = async (req, res) => {
         ],
       });
 
-      const [chatRequests, chats] = await Promise.all([ChatRequest.find({ chatRequestTopicId: chatRequestTopicId }), Chat.find({ chatTopicId: foundChatTopic._id })]);
+      const [chatRequests, chats] = await Promise.all([
+        ChatRequest.find({ chatRequestTopicId: chatRequestTopicId }),
+        foundChatTopic ? Chat.find({ chatTopicId: foundChatTopic._id }) : [],
+      ]);
 
       for (const chatRequest of chatRequests) {
         if (chatRequest?.image) {
@@ -321,7 +327,7 @@ exports.handleMessageRequest = async (req, res) => {
       }
 
       await Promise.all([
-        Chat.deleteMany({ chatTopicId: foundChatTopic._id }),
+        foundChatTopic ? Chat.deleteMany({ chatTopicId: foundChatTopic._id }) : Promise.resolve(),
         foundChatTopic?.deleteOne(),
         ChatRequest.deleteMany({ chatRequestTopicId: chatRequestTopicId }),
         ChatRequestTopic.findOneAndDelete({ _id: chatRequestTopicId }),

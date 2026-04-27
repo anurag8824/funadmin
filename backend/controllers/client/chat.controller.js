@@ -32,8 +32,23 @@ exports.createChat = async (req, res) => {
     }
 
     const messageType = Number(req.query.messageType);
+    const incomingText = typeof req?.body?.message === "string" ? req.body.message.trim() : "";
     const senderUserId = new mongoose.Types.ObjectId(req.query.senderUserId);
     const receiverUserId = new mongoose.Types.ObjectId(req.query.receiverUserId);
+
+    if (messageType !== 1) {
+      if (req?.body?.image) {
+        await deleteFromStorage(req?.body?.image);
+      }
+      if (req?.body?.audio) {
+        await deleteFromStorage(req?.body?.audio);
+      }
+      return res.status(200).json({ status: false, message: "Only text messages are supported right now." });
+    }
+
+    if (messageType === 1 && !incomingText) {
+      return res.status(200).json({ status: false, message: "message is required for text chat." });
+    }
 
     let chatTopic;
     const [follow, senderUser, receiverUser, foundChatTopic] = await Promise.all([
@@ -91,25 +106,8 @@ exports.createChat = async (req, res) => {
 
       messageRequest.senderUserId = senderUser._id;
 
-      if (messageType == 2) {
-        messageRequest.messageType = 2;
-        messageRequest.message = "📸 Image";
-        messageRequest.image = req?.body?.image ? req?.body?.image : "";
-      } else if (messageType == 3) {
-        messageRequest.messageType = 3;
-        messageRequest.message = "🎤 Audio";
-        messageRequest.audio = req?.body?.audio ? req?.body?.audio : "";
-      } else {
-        if (req?.body?.image) {
-          await deleteFromStorage(req?.body?.image);
-        }
-
-        if (req?.body?.audio) {
-          await deleteFromStorage(req?.body?.audio);
-        }
-
-        return res.status(200).json({ status: false, message: "messageType must be passed valid." });
-      }
+      messageRequest.messageType = 1;
+      messageRequest.message = incomingText;
 
       messageRequest.chatRequestTopicId = chatRequestTopic._id;
       messageRequest.date = new Date().toLocaleString();
@@ -123,7 +121,7 @@ exports.createChat = async (req, res) => {
 
         chatTopic.senderUserId = senderUser._id;
         chatTopic.receiverUserId = receiverUser._id;
-        isAccepted = false;
+        chatTopic.isAccepted = false;
       }
 
       const chat = new Chat();
@@ -282,25 +280,8 @@ exports.createChat = async (req, res) => {
 
       chat.senderUserId = senderUser._id;
 
-      if (messageType == 2) {
-        chat.messageType = 2;
-        chat.message = "📸 Image";
-        chat.image = req?.body?.image ? req?.body?.image : "";
-      } else if (messageType == 3) {
-        chat.messageType = 3;
-        chat.message = "🎤 Audio";
-        chat.audio = req?.body?.audio ? req?.body?.audio : "";
-      } else {
-        if (req?.body?.image) {
-          await deleteFromStorage(req?.body?.image);
-        }
-
-        if (req?.body?.audio) {
-          await deleteFromStorage(req?.body?.audio);
-        }
-
-        return res.status(200).json({ status: false, message: "messageType must be passed valid." });
-      }
+      chat.messageType = 1;
+      chat.message = incomingText;
 
       chat.chatTopicId = chatTopic._id;
       chat.date = new Date().toLocaleString();

@@ -72,7 +72,12 @@ db.once("open", async () => {
 //socket io
 const http = require("http");
 const server = http.createServer(app);
-global.io = require("socket.io")(server);
+global.io = require("socket.io")(server, {
+  // More tolerant heartbeat for mobile/background transitions.
+  pingInterval: 25000,
+  pingTimeout: 60000,
+  connectTimeout: 45000,
+});
 
 //socket.js
 require("./socket");

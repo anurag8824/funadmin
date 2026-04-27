@@ -56,13 +56,34 @@ io.on("connection", async (socket) => {
   socket.on("message", async (data) => {
     console.log("data in message =====================================  ", data);
 
-    const parseData = JSON.parse(data);
+    let parseData;
+    try {
+      parseData = typeof data === "string" ? JSON.parse(data) : data;
+    } catch (error) {
+      console.log("Invalid message payload");
+      return;
+    }
     console.log("parseData", parseData);
+
+    if (!parseData?.senderUserId || !parseData?.receiverUserId || !parseData?.chatTopicId) {
+      console.log("message payload missing senderUserId/receiverUserId/chatTopicId");
+      return;
+    }
+
+    if (Number(parseData?.messageType) !== 1) {
+      console.log("Only text messages are supported in socket message.");
+      return;
+    }
 
     const [follow, chatTopic] = await Promise.all([
       FollowerFollowing.findOne({ fromUserId: parseData?.senderUserId, toUserId: parseData?.receiverUserId }),
       ChatTopic.findById(parseData?.chatTopicId).populate("senderUserId", "_id name userName image fcmToken isBlock").populate("receiverUserId", "_id name userName image fcmToken isBlock"),
     ]);
+
+    if (!chatTopic) {
+      console.log("chatTopic not found for message event");
+      return;
+    }
 
     if (!follow && !chatTopic.isAccepted) {
       console.log("Users do not follow each other in message.");
@@ -1583,7 +1604,7 @@ io.on("connection", async (socket) => {
   // ==================== End WebRTC Audio Call Signaling Events ====================
 
   socket.on("disconnect", async (reason) => {
-    console.log(`socket disconnect ===============`, id, socket?.id, reason);
+    console.log(`socket disconnect`, { userId: id, socketId: socket?.id, reason });
 
     if (globalRoom) {
       const socket = await io.in(globalRoom).fetchSockets();
@@ -1616,8 +1637,11 @@ io.on("connection", async (socket) => {
             console.log("liveUser and related liveView deleted in disconnect");
           }
 
-          const sockets = await io.in(user?.liveHistoryId?.toString()).fetchSockets();
-          sockets?.length ? io.socketsLeave(user?.liveHistoryId?.toString()) : console.log("sockets not able to leave in disconnect");
+          const liveHistoryRoom = user?.liveHistoryId?.toString();
+          if (liveHistoryRoom) {
+            const sockets = await io.in(liveHistoryRoom).fetchSockets();
+            sockets?.length ? io.socketsLeave(liveHistoryRoom) : console.log("disconnect cleanup skipped: no sockets in liveHistory room");
+          }
         }
       }
     }

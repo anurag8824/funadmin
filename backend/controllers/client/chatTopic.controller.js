@@ -3,6 +3,7 @@ const ChatTopic = require("../../models/chatTopic.model");
 //import model
 const User = require("../../models/user.model");
 const ChatRequestTopic = require("../../models/chatRequestTopic.model");
+const FollowerFollowing = require("../../models/followerFollowing.model");
 
 //day.js
 const dayjs = require("dayjs");
@@ -162,6 +163,7 @@ exports.getChatList = async (req, res) => {
               message: 1,
               isAccepted: 1,
               unreadCount: 1,
+              lastChatMessageTime: 1,
               time: {
                 $let: {
                   vars: {
@@ -210,7 +212,7 @@ exports.getChatList = async (req, res) => {
               },
             },
           },
-          { $sort: { time: -1 } },
+          { $sort: { lastChatMessageTime: -1 } },
           { $skip: (start - 1) * limit },
           { $limit: limit },
         ]),
@@ -437,6 +439,7 @@ exports.getChatList = async (req, res) => {
               message: 1,
               unreadCount: 1,
               isAccepted: 1,
+              lastChatMessageTime: 1,
               time: {
                 $let: {
                   vars: {
@@ -485,7 +488,7 @@ exports.getChatList = async (req, res) => {
               },
             },
           },
-          { $sort: { time: -1 } },
+          { $sort: { lastChatMessageTime: -1 } },
           { $skip: (start - 1) * limit },
           { $limit: limit },
         ]),
@@ -521,13 +524,86 @@ exports.chatWithUserSearch = async (req, res) => {
 
     const userId = new mongoose.Types.ObjectId(req.query.userId);
     const searchString = req.query.searchString.trim();
+    const escapedSearch = searchString.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const searchRegex = new RegExp(escapedSearch, "i");
 
     const [user, response] = await Promise.all([
       User.findById(userId).select("_id isBlock").lean(),
-      User.find({
-        isBlock: false,
-        $or: [{ name: { $regex: searchString, $options: "i" } }, { userName: { $regex: searchString, $options: "i" } }],
-      }),
+      User.aggregate([
+        {
+          $match: {
+            isBlock: false,
+            _id: { $ne: userId },
+            $or: [{ name: { $regex: searchRegex } }, { userName: { $regex: searchRegex } }],
+          },
+        },
+        {
+          $lookup: {
+            from: "chattopics",
+            let: { otherUserId: "$_id", me: userId },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $or: [
+                      { $and: [{ $eq: ["$senderUserId", "$$me"] }, { $eq: ["$receiverUserId", "$$otherUserId"] }] },
+                      { $and: [{ $eq: ["$senderUserId", "$$otherUserId"] }, { $eq: ["$receiverUserId", "$$me"] }] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "chatTopics",
+          },
+        },
+        {
+          $lookup: {
+            from: "followerfollowings",
+            let: { otherUserId: "$_id", me: userId },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $or: [
+                      { $and: [{ $eq: ["$fromUserId", "$$me"] }, { $eq: ["$toUserId", "$$otherUserId"] }] },
+                      { $and: [{ $eq: ["$fromUserId", "$$otherUserId"] }, { $eq: ["$toUserId", "$$me"] }] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "followLinks",
+          },
+        },
+        {
+          $addFields: {
+            hasChatTopic: { $gt: [{ $size: "$chatTopics" }, 0] },
+            hasFollowerLink: { $gt: [{ $size: "$followLinks" }, 0] },
+          },
+        },
+        {
+          $match: {
+            $or: [{ hasChatTopic: true }, { hasFollowerLink: true }],
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            userId: "$_id",
+            name: 1,
+            userName: 1,
+            isProfileImageBanned: 1,
+            image: 1,
+            isVerified: 1,
+            isFake: 1,
+            hasChatTopic: 1,
+          },
+        },
+        { $sort: { hasChatTopic: -1, userName: 1 } },
+        { $limit: 30 },
+      ]),
     ]);
 
     if (!user) {
@@ -538,35 +614,11 @@ exports.chatWithUserSearch = async (req, res) => {
       return res.status(200).json({ status: false, message: "You are blocked by the admin." });
     }
 
-    const searchDataPromises = response.map(async (user) => {
-      const chatTopic = await ChatTopic.findOne({
-        $or: [{ $and: [{ senderUserId: user._id }, { receiverUserId: userId }] }, { $and: [{ senderUserId: userId }, { receiverUserId: user._id }] }],
-      });
-
-      if (chatTopic) {
-        return {
-          _id: user._id,
-          name: user.name,
-          userName: user.userName,
-          isProfileImageBanned: user.isProfileImageBanned,
-          image: user.image,
-          isVerified: user.isVerified,
-          isFake: user.isFake,
-        };
-      } else {
-        return null;
-      }
-    });
-
-    const searchData = await Promise.all(searchDataPromises);
-
-    const filteredSearchData = searchData.filter((data) => data !== null);
-
-    if (filteredSearchData.length > 0) {
+    if (response.length > 0) {
       return res.status(200).json({
         status: true,
         message: "Success",
-        data: filteredSearchData,
+        data: response,
       });
     } else {
       return res.status(200).json({
