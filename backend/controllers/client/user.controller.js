@@ -136,7 +136,8 @@ exports.loginOrSignUp = async (req, res) => {
         return res.status(200).json({ status: false, message: "identity must be required." });
       }
 
-      userQuery = await User.findOne({ identity: identity, email: req?.body?.email?.trim() }); //email field always be identity
+      // Must match checkUser: identity + loginType 3. Do not require body.email (signup/login only send identity).
+      userQuery = await User.findOne({ identity: identity, loginType: 3 });
     } else if (loginType === 4) {
       if (!req.body.email) {
         return res.status(200).json({ status: false, message: "email must be required." });
