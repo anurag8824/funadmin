@@ -20,10 +20,9 @@ exports.followUnfollowUser = async (req, res) => {
     const fromUserId = new mongoose.Types.ObjectId(req.query.fromUserId);
     const toUserId = new mongoose.Types.ObjectId(req.query.toUserId);
 
-    const [fromUser, toUser, alreadyFollower] = await Promise.all([
+    const [fromUser, toUser] = await Promise.all([
       User.findOne({ _id: fromUserId }).select("_id name isBlock image").lean(),
       User.findOne({ _id: toUserId }).select("_id isBlock fcmToken").lean(),
-      FollowerFollowing.findOne({ fromUserId: fromUserId, toUserId: toUserId }).lean(),
     ]);
 
     if (!fromUser) {
@@ -46,7 +45,12 @@ exports.followUnfollowUser = async (req, res) => {
       return res.status(200).json({ status: false, message: "You can't follow your own account." });
     }
 
-    if (alreadyFollower) {
+    const existingRelation = await FollowerFollowing.findOne({
+      fromUserId: fromUser._id,
+      toUserId: toUser._id,
+    }).lean();
+
+    if (existingRelation) {
       await FollowerFollowing.deleteOne({
         fromUserId: fromUser._id,
         toUserId: toUser._id,
@@ -58,10 +62,30 @@ exports.followUnfollowUser = async (req, res) => {
         isFollow: false,
       });
     } else {
-      const followerFollowing = new FollowerFollowing();
-      followerFollowing.fromUserId = fromUser._id;
-      followerFollowing.toUserId = toUser._id;
-      await followerFollowing.save();
+      try {
+        await FollowerFollowing.findOneAndUpdate(
+          {
+            fromUserId: fromUser._id,
+            toUserId: toUser._id,
+          },
+          {
+            $setOnInsert: {
+              fromUserId: fromUser._id,
+              toUserId: toUser._id,
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+          }
+        );
+      } catch (dbError) {
+        // Parallel requests can still race on unique index; treat duplicate as success.
+        if (dbError?.code !== 11000) {
+          throw dbError;
+        }
+      }
 
       res.status(200).json({
         status: true,

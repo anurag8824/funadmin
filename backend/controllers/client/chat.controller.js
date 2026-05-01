@@ -6,6 +6,7 @@ const User = require("../../models/user.model");
 const FollowerFollowing = require("../../models/followerFollowing.model");
 const ChatRequestTopic = require("../../models/chatRequestTopic.model");
 const ChatRequest = require("../../models/chatRequest.model");
+const Notification = require("../../models/notification.model");
 
 //private key
 const admin = require("../../util/privateKey");
@@ -15,6 +16,18 @@ const { deleteFromStorage } = require("../../util/storageHelper");
 
 //mongoose
 const mongoose = require("mongoose");
+
+const CHAT_MESSAGE_TYPES = {
+  TEXT: 1,
+  IMAGE: 2,
+  AUDIO: 3,
+};
+
+const getChatNotificationBody = (messageType, text) => {
+  if (messageType === CHAT_MESSAGE_TYPES.IMAGE) return "📷 Sent a photo";
+  if (messageType === CHAT_MESSAGE_TYPES.AUDIO) return "🎵 Sent an audio clip";
+  return `🗨️ ${text}`;
+};
 
 //send a message or create a message request ( image or audio )
 exports.createChat = async (req, res) => {
@@ -36,18 +49,27 @@ exports.createChat = async (req, res) => {
     const senderUserId = new mongoose.Types.ObjectId(req.query.senderUserId);
     const receiverUserId = new mongoose.Types.ObjectId(req.query.receiverUserId);
 
-    if (messageType !== 1) {
+    if (![CHAT_MESSAGE_TYPES.TEXT, CHAT_MESSAGE_TYPES.IMAGE, CHAT_MESSAGE_TYPES.AUDIO].includes(messageType)) {
       if (req?.body?.image) {
         await deleteFromStorage(req?.body?.image);
       }
       if (req?.body?.audio) {
         await deleteFromStorage(req?.body?.audio);
       }
-      return res.status(200).json({ status: false, message: "Only text messages are supported right now." });
+      return res.status(200).json({ status: false, message: "Invalid messageType. Use 1=text, 2=image, 3=audio." });
     }
 
-    if (messageType === 1 && !incomingText) {
+    if (messageType === CHAT_MESSAGE_TYPES.TEXT && !incomingText) {
       return res.status(200).json({ status: false, message: "message is required for text chat." });
+    }
+
+    const imageUrl = typeof req?.body?.image === "string" ? req.body.image.trim() : "";
+    const audioUrl = typeof req?.body?.audio === "string" ? req.body.audio.trim() : "";
+    if (messageType === CHAT_MESSAGE_TYPES.IMAGE && !imageUrl) {
+      return res.status(200).json({ status: false, message: "image is required for image chat." });
+    }
+    if (messageType === CHAT_MESSAGE_TYPES.AUDIO && !audioUrl) {
+      return res.status(200).json({ status: false, message: "audio is required for audio chat." });
     }
 
     let chatTopic;
@@ -106,8 +128,10 @@ exports.createChat = async (req, res) => {
 
       messageRequest.senderUserId = senderUser._id;
 
-      messageRequest.messageType = 1;
-      messageRequest.message = incomingText;
+      messageRequest.messageType = messageType;
+      messageRequest.message = messageType === CHAT_MESSAGE_TYPES.TEXT ? incomingText : "";
+      messageRequest.image = messageType === CHAT_MESSAGE_TYPES.IMAGE ? imageUrl : "";
+      messageRequest.audio = messageType === CHAT_MESSAGE_TYPES.AUDIO ? audioUrl : "";
 
       messageRequest.chatRequestTopicId = chatRequestTopic._id;
       messageRequest.date = new Date().toLocaleString();
@@ -142,6 +166,15 @@ exports.createChat = async (req, res) => {
         message: "Message request created successfully.",
         chat: messageRequest,
       });
+
+      const requestNotification = new Notification();
+      requestNotification.userId = receiverUser._id;
+      requestNotification.otherUserId = senderUser._id;
+      requestNotification.title = `New Message Request from ${senderUser.name}`;
+      requestNotification.message = `${senderUser.name} sent a message request.`;
+      requestNotification.image = senderUser?.image || "";
+      requestNotification.date = new Date().toLocaleString();
+      requestNotification.save().catch((e) => console.log("Error saving message request notification:", e));
 
       if (!receiverUser.isBlock && receiverUser.fcmToken !== null) {
         const adminPromise = await admin;
@@ -280,8 +313,10 @@ exports.createChat = async (req, res) => {
 
       chat.senderUserId = senderUser._id;
 
-      chat.messageType = 1;
-      chat.message = incomingText;
+      chat.messageType = messageType;
+      chat.message = messageType === CHAT_MESSAGE_TYPES.TEXT ? incomingText : "";
+      chat.image = messageType === CHAT_MESSAGE_TYPES.IMAGE ? imageUrl : "";
+      chat.audio = messageType === CHAT_MESSAGE_TYPES.AUDIO ? audioUrl : "";
 
       chat.chatTopicId = chatTopic._id;
       chat.date = new Date().toLocaleString();
@@ -297,6 +332,15 @@ exports.createChat = async (req, res) => {
         chat: chat,
       });
 
+      const chatNotification = new Notification();
+      chatNotification.userId = receiverUser._id;
+      chatNotification.otherUserId = senderUser._id;
+      chatNotification.title = `${senderUser.name} sent you a message 📩`;
+      chatNotification.message = getChatNotificationBody(messageType, chat.message);
+      chatNotification.image = senderUser?.image || "";
+      chatNotification.date = new Date().toLocaleString();
+      chatNotification.save().catch((e) => console.log("Error saving chat notification:", e));
+
       if (!receiverUser.isBlock && receiverUser.fcmToken !== null) {
         const adminPromise = await admin;
 
@@ -304,7 +348,7 @@ exports.createChat = async (req, res) => {
           token: receiverUser.fcmToken,
           notification: {
             title: `${senderUser.name} sent you a message 📩`,
-            body: `🗨️ ${chat.message}`,
+            body: getChatNotificationBody(messageType, chat.message),
             image: senderUser?.image,
           },
           data: {

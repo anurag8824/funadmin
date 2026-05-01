@@ -110,7 +110,7 @@ exports.checkUser = async (req, res) => {
 //user login and sign up (fcmToken required for push notifications)
 exports.loginOrSignUp = async (req, res) => {
   try {
-    if (!req.body.identity || req.body.loginType === undefined || !req.body.fcmToken) {
+    if (req.body.loginType === undefined || !req.body.fcmToken) {
       return res.status(200).json({ status: false, message: "Oops ! Invalid details!" });
     }
 
@@ -130,7 +130,7 @@ exports.loginOrSignUp = async (req, res) => {
         return res.status(200).json({ status: false, message: "email must be required." });
       }
 
-      userQuery = await User.findOne({ email: req?.body?.email?.trim() });
+      userQuery = await User.findOne({ email: req?.body?.email?.trim(), loginType: 2 });
     } else if (loginType === 3) {
       if (!req.body.identity) {
         return res.status(200).json({ status: false, message: "identity must be required." });
@@ -163,21 +163,12 @@ exports.loginOrSignUp = async (req, res) => {
       user.fcmToken = req.body.fcmToken ? req.body.fcmToken.trim() : user.fcmToken;
       user.lastlogin = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
 
-      if (loginType === 3) {
-        const user_ = await userFunction(user, req);
-
-        return res.status(200).json({
-          status: true,
-          message: "The user has successfully logged in.",
-          user: user_,
-          signUp: false,
-        });
-      }
+      const user_ = await userFunction(user, req);
 
       return res.status(200).json({
         status: true,
         message: "The user has successfully logged in.",
-        user: user,
+        user: user_,
         signUp: false,
       });
     } else {

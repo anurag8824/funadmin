@@ -17,6 +17,8 @@ const HashTag = require("../../models/hashTag.model");
 const HashTagUsageHistory = require("../../models/hashTagUsageHistory.model");
 const Report = require("../../models/report.model");
 const Notification = require("../../models/notification.model");
+const ReelUploadJob = require("../../models/reelUploadJob.model");
+const { createAndEnqueueReelJob, getActiveReelJob } = require("../../services/reelProcessing.service");
 
 //private key
 const admin = require("../../util/privateKey");
@@ -30,6 +32,13 @@ const { generateUniqueVideoOrPostId } = require("../../util/generateUniqueVideoO
 //upload video by particular user
 exports.uploadvideo = async (req, res, next) => {
   try {
+    console.log("[REELS_UPLOAD][REQ]", {
+      userId: req.query.userId,
+      videoUrl: req?.body?.videoUrl,
+      videoImage: req?.body?.videoImage,
+      videoTime: req?.body?.videoTime,
+      hasCaption: !!req?.body?.caption,
+    });
     if (!req.query.userId) {
       if (req?.body?.videoImage) {
         await deleteFromStorage(req?.body?.videoImage);
@@ -164,9 +173,50 @@ exports.uploadvideo = async (req, res, next) => {
     }
 
     video.uniqueVideoId = uniqueVideoId;
+    video.processingStatus = "ready";
     await video.save();
 
-    res.status(200).json({ status: true, message: "Video has been uploaded by the user.", data: video });
+    let uploadJob = null;
+    const shouldProcessAsync = String(process.env.REELS_ASYNC_PROCESSING || "false").toLowerCase() === "true";
+    if (shouldProcessAsync) {
+      const existingJob = await getActiveReelJob(video._id);
+      if (existingJob) {
+        uploadJob = existingJob;
+      } else {
+        video.processingStatus = "processing";
+        await video.save();
+        uploadJob = await createAndEnqueueReelJob({
+          videoId: video._id,
+          userId: user._id,
+          sourceUrl: video.videoUrl,
+        });
+      }
+      if (uploadJob?.state === "failed") {
+        video.processingStatus = "failed";
+        video.processingError = uploadJob.error || "Queue job creation failed";
+        await video.save();
+      }
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "Video has been uploaded by the user.",
+      data: video,
+      uploadJob: uploadJob
+        ? {
+            id: uploadJob._id,
+            state: uploadJob.state,
+            progress: uploadJob.progress,
+          }
+        : null,
+    });
+    console.log("[REELS_UPLOAD][OK]", {
+      videoId: String(video._id),
+      userId: String(user._id),
+      processingStatus: video.processingStatus,
+      uploadJobId: uploadJob?._id ? String(uploadJob._id) : null,
+      uploadJobState: uploadJob?.state || null,
+    });
 
     const videoUrl = req?.body?.videoUrl;
 
@@ -473,6 +523,123 @@ exports.uploadvideo = async (req, res, next) => {
 };
 
 //update video by particular user
+exports.getReelUploadJobStatus = async (req, res) => {
+  try {
+    const { videoId, uploadJobId } = req.query;
+    if (!videoId && !uploadJobId) {
+      return res.status(400).json({ status: false, message: "videoId or uploadJobId is required." });
+    }
+
+    const filter = uploadJobId ? { _id: uploadJobId } : { videoId };
+    const uploadJob = await ReelUploadJob.findOne(filter).sort({ createdAt: -1 }).lean();
+    if (!uploadJob) {
+      return res.status(200).json({ status: true, message: "No upload job found.", data: null });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Upload job status fetched successfully.",
+      data: {
+        id: uploadJob._id,
+        videoId: uploadJob.videoId,
+        state: uploadJob.state,
+        progress: uploadJob.progress,
+        error: uploadJob.error,
+        startedAt: uploadJob.startedAt,
+        completedAt: uploadJob.completedAt,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal server error" });
+  }
+};
+
+exports.retryReelProcessing = async (req, res) => {
+  try {
+    const { userId, videoId } = req.query;
+    if (!userId || !videoId) {
+      return res.status(400).json({ status: false, message: "userId and videoId are required." });
+    }
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(videoId)) {
+      return res.status(400).json({ status: false, message: "Invalid userId or videoId." });
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const videoObjectId = new mongoose.Types.ObjectId(videoId);
+    const video = await Video.findById(videoObjectId).select("_id userId videoUrl processingStatus").lean();
+    if (!video) {
+      return res.status(404).json({ status: false, message: "Video not found." });
+    }
+    if (String(video.userId) !== String(userObjectId)) {
+      return res.status(403).json({ status: false, message: "You can retry only your own reel processing." });
+    }
+    if (!video.videoUrl) {
+      return res.status(400).json({ status: false, message: "Source video URL is missing." });
+    }
+
+    const existingJob = await getActiveReelJob(videoObjectId);
+    if (existingJob) {
+      return res.status(200).json({
+        status: true,
+        message: "Reel processing already in progress.",
+        data: {
+          videoId: videoObjectId,
+          uploadJobId: existingJob._id,
+          state: existingJob.state,
+          progress: existingJob.progress,
+        },
+      });
+    }
+
+    await Video.updateOne(
+      { _id: videoObjectId },
+      {
+        $set: {
+          processingStatus: "processing",
+          processingError: "",
+        },
+      }
+    );
+
+    const uploadJob = await createAndEnqueueReelJob({
+      videoId: videoObjectId,
+      userId: userObjectId,
+      sourceUrl: video.videoUrl,
+    });
+
+    if (uploadJob?.state === "failed") {
+      await Video.updateOne(
+        { _id: videoObjectId },
+        {
+          $set: {
+            processingStatus: "failed",
+            processingError: uploadJob.error || "Queue job creation failed",
+          },
+        }
+      );
+      return res.status(500).json({
+        status: false,
+        message: uploadJob.error || "Failed to enqueue reel processing job.",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Reel processing retried successfully.",
+      data: {
+        videoId: videoObjectId,
+        uploadJobId: uploadJob._id,
+        state: uploadJob.state,
+        progress: uploadJob.progress,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal server error" });
+  }
+};
+
 exports.updateVideoByUser = async (req, res, next) => {
   try {
     if (!req.query.userId || !req.query.videoId) {
@@ -692,6 +859,9 @@ exports.videosOfUser = async (req, res, next) => {
             videoImage: 1,
             songId: 1,
             videoUrl: 1,
+            assets: 1,
+            processingStatus: 1,
+            processingError: 1,
             caption: 1,
             isBanned: 1,
             hashTag: "$hashTag.hashTag",
@@ -864,6 +1034,9 @@ exports.getAllVideos = async (req, res, next) => {
             caption: 1,
             videoImage: 1,
             videoUrl: 1,
+            assets: 1,
+            processingStatus: 1,
+            processingError: 1,
             shareCount: 1,
             isFake: 1,
             songId: 1,
@@ -994,20 +1167,27 @@ exports.getAllVideos = async (req, res, next) => {
     } else {
       const userId = new mongoose.Types.ObjectId(req.query.userId);
 
-      const user = await User.findOne({ _id: userId });
-
+      const user = await User.findOne({ _id: userId }).lean();
       if (!user) {
         return res.status(200).json({ status: false, message: "User does not found." });
       }
-
       if (user.isBlock) {
         return res.status(200).json({ status: false, message: "you are blocked by the admin." });
       }
 
-      const data = [
-        {
-          $match: { isBanned: false },
-        },
+      // Production optimization:
+      // - paginate at DB level (skip/limit) instead of loading full feed then slicing
+      // - stable sort by recency (createdAt desc) for cacheability and deterministic UX
+      const baseMatch = {
+        isBanned: false,
+        ...(settingJSON.isFakeData ? {} : { isFake: false }),
+      };
+
+      const paginatedVideos = await Video.aggregate([
+        { $match: baseMatch },
+        { $sort: { createdAt: -1 } },
+        { $skip: (start - 1) * limit },
+        { $limit: limit },
         {
           $lookup: {
             from: "songs",
@@ -1019,7 +1199,7 @@ exports.getAllVideos = async (req, res, next) => {
         {
           $unwind: {
             path: "$song",
-            preserveNullAndEmptyArrays: true, //to include documents with empty 'song' array (when songId is null)
+            preserveNullAndEmptyArrays: true,
           },
         },
         {
@@ -1097,16 +1277,18 @@ exports.getAllVideos = async (req, res, next) => {
             caption: 1,
             videoImage: 1,
             videoUrl: 1,
+            assets: 1,
+            processingStatus: 1,
+            processingError: 1,
+            videoTime: 1,
             shareCount: 1,
             isFake: 1,
             songId: 1,
             createdAt: 1,
-
             songTitle: "$song.songTitle",
             songImage: "$song.songImage",
             songLink: "$song.songLink",
             singerName: "$song.singerName",
-
             hashTag: "$hashTag.hashTag",
             userId: "$user._id",
             name: "$user.name",
@@ -1120,72 +1302,9 @@ exports.getAllVideos = async (req, res, next) => {
             isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
-            time: {
-              $let: {
-                vars: {
-                  timeDiff: { $subtract: [now.toDate(), "$createdAt"] },
-                },
-                in: {
-                  $concat: [
-                    {
-                      $switch: {
-                        branches: [
-                          {
-                            case: { $gte: ["$$timeDiff", 31536000000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 31536000000] } } }, " years ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 2592000000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 2592000000] } } }, " months ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 604800000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 604800000] } } }, " weeks ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 86400000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 86400000] } } }, " days ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 3600000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 3600000] } } }, " hours ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 60000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 60000] } } }, " minutes ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 1000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 1000] } } }, " seconds ago"] },
-                          },
-                          { case: true, then: "Just now" },
-                        ],
-                      },
-                    },
-                  ],
-                },
-              },
-            },
           },
         },
-      ];
-
-      let allVideos;
-      if (settingJSON.isFakeData) {
-        const [realVideoOfUser, fakeVideoOfUser] = await Promise.all([Video.aggregate([{ $match: { isFake: false } }, ...data]), Video.aggregate([{ $match: { isFake: true } }, ...data])]);
-
-        allVideos = [...realVideoOfUser, ...fakeVideoOfUser];
-        //allVideos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        allVideos = allVideos.sort(() => 0.5 - Math.random());
-      } else {
-        allVideos = await Video.aggregate([{ $match: { isFake: false } }, ...data]);
-        //allVideos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        allVideos = allVideos.sort(() => 0.5 - Math.random());
-      }
-
-      const paginatedVideos = allVideos.slice((start - 1) * limit, start * limit);
+      ]);
 
       return res.status(200).json({
         status: true,
@@ -1193,6 +1312,206 @@ exports.getAllVideos = async (req, res, next) => {
         data: paginatedVideos,
       });
     }
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Sever Error" });
+  }
+};
+
+// Lightweight reels feed (metadata-first, cursor-ready).
+// GET /client/video/getReelsFeedLite?userId=...&limit=20&cursorCreatedAt=...&cursorId=...
+exports.getReelsFeedLite = async (req, res) => {
+  try {
+    console.log("[REELS_FEED][REQ]", {
+      userId: req.query.userId,
+      start: req.query.start,
+      limit: req.query.limit,
+      cursorCreatedAt: req.query.cursorCreatedAt || null,
+      cursorId: req.query.cursorId || null,
+      videoId: req.query.videoId || null,
+    });
+    if (!req.query.userId) {
+      return res.status(200).json({ status: false, message: "userId must be requried." });
+    }
+
+    if (!settingJSON) {
+      return res.status(200).json({ status: false, message: "Setting does not found." });
+    }
+
+    const userId = new mongoose.Types.ObjectId(req.query.userId);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || "20", 10), 1), 50);
+    const start = Math.max(parseInt(req.query.start || "1", 10), 1);
+    const cursorCreatedAt = req.query.cursorCreatedAt ? new Date(req.query.cursorCreatedAt) : null;
+    const cursorId = req.query.cursorId && mongoose.Types.ObjectId.isValid(req.query.cursorId)
+      ? new mongoose.Types.ObjectId(req.query.cursorId)
+      : null;
+    const requestedVideoId = req.query.videoId && mongoose.Types.ObjectId.isValid(req.query.videoId)
+      ? new mongoose.Types.ObjectId(req.query.videoId)
+      : null;
+
+    const user = await User.findOne({ _id: userId }).select("_id isBlock").lean();
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
+    }
+
+    const baseMatch = {
+      isBanned: false,
+      ...(settingJSON.isFakeData ? {} : { isFake: false }),
+    };
+
+    if (req.query.videoId && !requestedVideoId) {
+      return res.status(400).json({ status: false, message: "Invalid videoId format." });
+    }
+    if (requestedVideoId) {
+      baseMatch._id = requestedVideoId;
+    }
+
+    // Cursor pagination: (createdAt desc, _id desc)
+    if (!requestedVideoId && cursorCreatedAt && cursorId) {
+      baseMatch.$or = [
+        { createdAt: { $lt: cursorCreatedAt } },
+        { createdAt: cursorCreatedAt, _id: { $lt: cursorId } },
+      ];
+    }
+
+    const videos = await Video.aggregate([
+      { $match: baseMatch },
+      { $sort: { createdAt: -1, _id: -1 } },
+      ...(!requestedVideoId && !(cursorCreatedAt && cursorId) ? [{ $skip: (start - 1) * limit }] : []),
+      { $limit: limit + 1 }, // fetch one extra to determine hasMore
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: false } },
+      {
+        $lookup: {
+          from: "songs",
+          localField: "songId",
+          foreignField: "_id",
+          as: "song",
+        },
+      },
+      { $unwind: { path: "$song", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "likehistoryofpostorvideos",
+          let: { videoId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$videoId", "$$videoId"] } } },
+            { $count: "count" },
+          ],
+          as: "totalLikesAgg",
+        },
+      },
+      {
+        $lookup: {
+          from: "postorvideocomments",
+          let: { videoId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$videoId", "$$videoId"] } } },
+            { $count: "count" },
+          ],
+          as: "totalCommentsAgg",
+        },
+      },
+      {
+        $lookup: {
+          from: "likehistoryofpostorvideos",
+          let: { videoId: "$_id", userId: userId },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ["$videoId", "$$videoId"] }, { $eq: ["$userId", "$$userId"] }],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "likeHistory",
+        },
+      },
+      {
+        $lookup: {
+          from: "followerfollowings",
+          let: { postUserId: "$userId", requestingUserId: userId },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ["$toUserId", "$$postUserId"] }, { $eq: ["$fromUserId", "$$requestingUserId"] }],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "isFollowAgg",
+        },
+      },
+      {
+        $project: {
+          caption: 1,
+          videoImage: 1,
+          videoUrl: 1,
+          assets: 1,
+          processingStatus: 1,
+          processingError: 1,
+          videoTime: 1,
+          createdAt: 1,
+          userId: "$user._id",
+          name: "$user.name",
+          userName: "$user.userName",
+          userImage: "$user.image",
+          isVerified: "$user.isVerified",
+          userIsFake: "$user.isFake",
+          isProfileImageBanned: "$user.isProfileImageBanned",
+          songId: 1,
+          songTitle: "$song.songTitle",
+          songImage: "$song.songImage",
+          songLink: "$song.songLink",
+          singerName: "$song.singerName",
+          isLike: { $gt: [{ $size: "$likeHistory" }, 0] },
+          isFollow: { $gt: [{ $size: "$isFollowAgg" }, 0] },
+          isSaved: { $in: [userId, { $ifNull: ["$savedBy", []] }] },
+          totalLikes: {
+            $ifNull: [{ $arrayElemAt: ["$totalLikesAgg.count", 0] }, 0],
+          },
+          totalComments: {
+            $ifNull: [{ $arrayElemAt: ["$totalCommentsAgg.count", 0] }, 0],
+          },
+          totalShares: "$shareCount",
+        },
+      },
+    ]);
+
+    const hasMore = videos.length > limit;
+    const items = hasMore ? videos.slice(0, limit) : videos;
+    const lastItem = items.length > 0 ? items[items.length - 1] : null;
+
+    const responsePayload = {
+      status: true,
+      message: "Retrieve the videos uploaded by users.",
+      data: items,
+      paging: {
+        hasMore,
+        nextCursorCreatedAt: hasMore ? lastItem.createdAt : null,
+        nextCursorId: hasMore ? lastItem._id : null,
+      },
+    };
+    console.log("[REELS_FEED][OK]", {
+      count: items.length,
+      hasMore,
+      ids: items.map((v) => String(v._id || "")),
+    });
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message || "Internal Sever Error" });
@@ -1511,6 +1830,9 @@ exports.fetchVideosOfParticularSong = async (req, res) => {
           $project: {
             videoImage: 1,
             videoUrl: 1,
+            assets: 1,
+            processingStatus: 1,
+            processingError: 1,
             caption: 1,
             isBanned: 1,
             isLike: 1,
@@ -1659,6 +1981,9 @@ exports.fetchUserVideos = async (req, res, next) => {
               videoImage: 1,
               songId: 1,
               videoUrl: 1,
+              assets: 1,
+              processingStatus: 1,
+              processingError: 1,
               caption: 1,
               isBanned: 1,
               hashTag: "$hashTag.hashTag",
@@ -1778,6 +2103,9 @@ exports.fetchUserVideos = async (req, res, next) => {
               videoImage: 1,
               songId: 1,
               videoUrl: 1,
+              assets: 1,
+              processingStatus: 1,
+              processingError: 1,
               caption: 1,
               isBanned: 1,
               hashTag: "$hashTag.hashTag",
@@ -1948,6 +2276,9 @@ exports.getVideoLibrary = async (req, res, next) => {
             caption: 1,
             videoImage: 1,
             videoUrl: 1,
+            assets: 1,
+            processingStatus: 1,
+            processingError: 1,
             shareCount: 1,
             isFake: 1,
             songId: 1,
@@ -2109,6 +2440,9 @@ exports.getVideoLibrary = async (req, res, next) => {
             caption: 1,
             videoImage: 1,
             videoUrl: 1,
+            assets: 1,
+            processingStatus: 1,
+            processingError: 1,
             shareCount: 1,
             isFake: 1,
             songId: 1,
@@ -2283,6 +2617,9 @@ exports.getVideoById = async (req, res) => {
             caption: 1,
             videoImage: 1,
             videoUrl: 1,
+            assets: 1,
+            processingStatus: 1,
+            processingError: 1,
             shareCount: 1,
             isFake: 1,
             songId: 1,

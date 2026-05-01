@@ -2,7 +2,7 @@ exports.LOGIN_TYPE = {
   MOBILENO: 1,
   GOOGLE: 2,
   QUICK: 3,
-  APPLE: 4,
+  FACEBOOK: 4,
 };
 
 exports.MESSAGE_TYPE = {

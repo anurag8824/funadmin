@@ -27,6 +27,10 @@ route.get("/videosOfUser", checkAccessWithSecretKey(), VideoController.videosOfU
 
 //if isFakeData on then real+fake videos otherwise fake videos
 route.get("/getAllVideos", checkAccessWithSecretKey(), VideoController.getAllVideos);
+//lightweight reels feed (metadata-first)
+route.get("/getReelsFeedLite", checkAccessWithSecretKey(), VideoController.getReelsFeedLite);
+route.get("/reelUploadJobStatus", checkAccessWithSecretKey(), VideoController.getReelUploadJobStatus);
+route.post("/retryReelProcessing", checkAccessWithSecretKey(), VideoController.retryReelProcessing);
 
 //delete video
 route.delete("/deleteVideoOfUser", checkAccessWithSecretKey(), VideoController.deleteVideoOfUser);
