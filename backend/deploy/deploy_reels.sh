@@ -10,11 +10,13 @@ set -euo pipefail
 #   REMOTE=origin
 
 APP_DIR="${APP_DIR:-/var/www/funadmin/backend}"
+GIT_DIR="${GIT_DIR:-/var/www/funadmin}"
 BRANCH="${BRANCH:-main}"
 REMOTE="${REMOTE:-origin}"
 
 echo "==> Starting reels deployment"
 echo "    APP_DIR=$APP_DIR"
+echo "    GIT_DIR=$GIT_DIR"
 echo "    REMOTE=$REMOTE"
 echo "    BRANCH=$BRANCH"
 
@@ -25,21 +27,21 @@ fi
 
 cd "$APP_DIR"
 
-if [ ! -d .git ]; then
-  echo "ERROR: Not a git repo: $APP_DIR"
+if [ ! -d "$GIT_DIR/.git" ]; then
+  echo "ERROR: Not a git repo: $GIT_DIR"
   exit 1
 fi
 
 echo "==> Fetching latest code"
-git fetch "$REMOTE" "$BRANCH"
+git -C "$GIT_DIR" fetch "$REMOTE" "$BRANCH"
 
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$(git -C "$GIT_DIR" status --porcelain)" ]; then
   echo "WARNING: Local changes found. Stashing before pull."
-  git stash push -u -m "auto-stash-before-deploy-$(date +%s)"
+  git -C "$GIT_DIR" stash push -u -m "auto-stash-before-deploy-$(date +%s)"
 fi
 
 echo "==> Pulling latest commit"
-git pull --ff-only "$REMOTE" "$BRANCH"
+git -C "$GIT_DIR" pull --ff-only "$REMOTE" "$BRANCH"
 
 echo "==> Installing dependencies"
 npm install
