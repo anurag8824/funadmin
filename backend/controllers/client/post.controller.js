@@ -1015,45 +1015,43 @@ exports.postsOfUser = async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.query.userId); // Logged-in userId
     const userIdOfPost = new mongoose.Types.ObjectId(req.query.toUserId); // userId of post
 
-    const [{ viewer: user, excludedUserIds }, posts] = await Promise.all([
-      resolveBlockContext(userId),
-      Post.aggregate([
-        {
-          $match: {
-            userId: userIdOfPost,
-            ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
-          },
+    const { viewer: user, excludedUserIds } = await resolveBlockContext(userId);
+    const posts = await Post.aggregate([
+      {
+        $match: {
+          userId: userIdOfPost,
+          ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
         },
-        {
-          $project: {
-            mainPostImage: 1,
-            postImage: 1,
-            caption: 1,
-            createdAt: 1,
-          },
+      },
+      {
+        $project: {
+          mainPostImage: 1,
+          postImage: 1,
+          caption: 1,
+          createdAt: 1,
         },
-        ...(req.query.userId === req.query.toUserId
-          ? [] // No filter for `isBanned` if userId matches toUserId
-          : [
-              {
-                $addFields: {
-                  postImage: {
-                    $filter: {
-                      input: "$postImage",
-                      as: "image",
-                      cond: { $eq: ["$$image.isBanned", false] },
-                    },
+      },
+      ...(req.query.userId === req.query.toUserId
+        ? [] // No filter for `isBanned` if userId matches toUserId
+        : [
+            {
+              $addFields: {
+                postImage: {
+                  $filter: {
+                    input: "$postImage",
+                    as: "image",
+                    cond: { $eq: ["$$image.isBanned", false] },
                   },
                 },
               },
-              {
-                $match: { postImage: { $ne: [] } },
-              },
-            ]),
-        {
-          $sort: { createdAt: -1 },
-        },
-      ]),
+            },
+            {
+              $match: { postImage: { $ne: [] } },
+            },
+          ]),
+      {
+        $sort: { createdAt: -1 },
+      },
     ]);
 
     if (!user) {

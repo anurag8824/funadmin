@@ -791,63 +791,62 @@ exports.videosOfUser = async (req, res, next) => {
     const userId = new mongoose.Types.ObjectId(req.query.userId); // Logged-in userId
     const userIdOfVideo = new mongoose.Types.ObjectId(req.query.toUserId); // userId of video
 
-    const [{ viewer: user, excludedUserIds }, videos] = await Promise.all([
-      resolveBlockContext(userId),
-      Video.aggregate([
-        {
-          $match: {
-            userId: userIdOfVideo,
-            ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
-            ...(req.query.userId === req.query.toUserId ? {} : { isBanned: false }),
-          },
+    const { viewer: user, excludedUserIds } = await resolveBlockContext(userId);
+    const videos = await Video.aggregate([
+      {
+        $match: {
+          userId: userIdOfVideo,
+          ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
+          ...(req.query.userId === req.query.toUserId ? {} : { isBanned: false }),
         },
-        {
-          $lookup: {
-            from: "users",
-            localField: "userId",
-            foreignField: "_id",
-            as: "user",
-          },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
         },
-        { $unwind: { path: "$user", preserveNullAndEmptyArrays: false } },
-        {
-          $lookup: {
-            from: "songs",
-            localField: "songId",
-            foreignField: "_id",
-            as: "song",
-          },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: false } },
+      {
+        $lookup: {
+          from: "songs",
+          localField: "songId",
+          foreignField: "_id",
+          as: "song",
         },
-        {
-          $unwind: {
-            path: "$song",
-            preserveNullAndEmptyArrays: true, //to include documents with empty 'song' array (when songId is null)
-          },
+      },
+      {
+        $unwind: {
+          path: "$song",
+          preserveNullAndEmptyArrays: true, //to include documents with empty 'song' array (when songId is null)
         },
-        {
-          $lookup: {
-            from: "hashtags",
-            localField: "hashTagId",
-            foreignField: "_id",
-            as: "hashTag",
-          },
+      },
+      {
+        $lookup: {
+          from: "hashtags",
+          localField: "hashTagId",
+          foreignField: "_id",
+          as: "hashTag",
         },
-        {
-          $lookup: {
-            from: "likehistoryofpostorvideos",
-            let: { videoId: "$_id" },
-            pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$videoId", "$$videoId"] }, { $eq: ["$userId", userId] }] } } }],
-            as: "likes",
-          },
+      },
+      {
+        $lookup: {
+          from: "likehistoryofpostorvideos",
+          let: { videoId: "$_id" },
+          pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$videoId", "$$videoId"] }, { $eq: ["$userId", userId] }] } } }],
+          as: "likes",
         },
-        {
-          $lookup: {
-            from: "likehistoryofpostorvideos",
-            localField: "_id",
-            foreignField: "videoId",
-            as: "totalLikes",
-          },
+      },
+      {
+        $lookup: {
+          from: "likehistoryofpostorvideos",
+          localField: "_id",
+          foreignField: "videoId",
+          as: "totalLikes",
         },
+      },
         {
           $lookup: {
             from: "postorvideocomments",
@@ -904,7 +903,6 @@ exports.videosOfUser = async (req, res, next) => {
           },
         },
         { $sort: { createdAt: -1 } },
-      ]),
     ]);
 
     if (!user) {
