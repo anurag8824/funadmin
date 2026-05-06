@@ -33,6 +33,7 @@ const userSchema = new mongoose.Schema(
 
     isLive: { type: Boolean, default: false },
     liveHistoryId: { type: mongoose.Schema.Types.ObjectId, ref: "LiveHistory", default: null },
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     isBlock: { type: Boolean, default: false },
     isOnline: { type: Boolean, default: false },

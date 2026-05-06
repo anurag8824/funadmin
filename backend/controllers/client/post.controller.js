@@ -28,6 +28,22 @@ const dayjs = require("dayjs");
 //private key
 const admin = require("../../util/privateKey");
 
+const toObjectId = (id) => new mongoose.Types.ObjectId(id);
+const hasUserBlocked = (userDoc, targetId) =>
+  (userDoc?.blockedUsers || []).some((id) => String(id) === String(targetId));
+
+async function resolveBlockContext(viewerId) {
+  const viewer = await User.findById(viewerId).select("_id isBlock blockedUsers").lean();
+  if (!viewer) return { viewer: null, excludedUserIds: [] };
+  const blockedByViewer = (viewer.blockedUsers || []).map((id) => String(id));
+  const blockedViewerByUsers = await User.find({ blockedUsers: toObjectId(viewerId) }).select("_id").lean();
+  const blockedViewerByIds = blockedViewerByUsers.map((u) => String(u._id));
+  return {
+    viewer,
+    excludedUserIds: [...new Set([...blockedByViewer, ...blockedViewerByIds])].map((id) => toObjectId(id)),
+  };
+}
+
 //upload post by particular user
 exports.uploadPost = async (req, res, next) => {
   try {
@@ -999,11 +1015,14 @@ exports.postsOfUser = async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.query.userId); // Logged-in userId
     const userIdOfPost = new mongoose.Types.ObjectId(req.query.toUserId); // userId of post
 
-    const [user, posts] = await Promise.all([
-      User.findOne({ _id: userId }).lean(),
+    const [{ viewer: user, excludedUserIds }, posts] = await Promise.all([
+      resolveBlockContext(userId),
       Post.aggregate([
         {
-          $match: { userId: userIdOfPost },
+          $match: {
+            userId: userIdOfPost,
+            ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
+          },
         },
         {
           $project: {
@@ -1947,6 +1966,18 @@ exports.getPostById = async (req, res) => {
     const post = await Post.findById(postObjectId).lean();
     if (!post) {
       return res.status(200).json({ status: false, message: "Post not found." });
+    }
+
+    const viewerId = req.query.userId;
+    if (viewerId && mongoose.Types.ObjectId.isValid(viewerId)) {
+      const viewer = await User.findById(viewerId).select("_id blockedUsers").lean();
+      if (hasUserBlocked(viewer, post.userId)) {
+        return res.status(200).json({ status: false, message: "This post is unavailable." });
+      }
+      const ownerForBlock = await User.findById(post.userId).select("_id blockedUsers").lean();
+      if (hasUserBlocked(ownerForBlock, viewerId)) {
+        return res.status(200).json({ status: false, message: "This post is unavailable." });
+      }
     }
 
     const user = await User.findById(post.userId).lean();

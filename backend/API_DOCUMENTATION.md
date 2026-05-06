@@ -216,14 +216,15 @@ MongoDB stores **all application data** via Mongoose schemas.
 {
   "status": true,
   "message": "User logged in successfully",
-  "data": {
+  "authToken": "jwt_token_here",
+  "user": {
     "_id": "...",
     "name": "John Doe",
     "userName": "johndoe",
     "image": "https://...",
-    "coin": 5000,
-    "token": "jwt_token_here"
-  }
+    "coin": 5000
+  },
+  "signUp": false
 }
 ```
 
@@ -359,6 +360,53 @@ MongoDB stores **all application data** via Mongoose schemas.
     "caption": "Beautiful sunset",
     "hashtags": ["#sunset", "#nature"]
   }
+}
+```
+
+#### 1.12 Block User
+- **Endpoint**: `POST /client/user/blockUser`
+- **Headers**: `key: <secretKey>`
+- **Auth Header**: `Authorization: Bearer <authToken>`
+- **Query**: `?userId=<userId>&targetUserId=<targetUserId>`
+- **Response**:
+```json
+{
+  "status": true,
+  "message": "User blocked successfully."
+}
+```
+
+#### 1.13 Unblock User
+- **Endpoint**: `POST /client/user/unblockUser`
+- **Headers**: `key: <secretKey>`
+- **Auth Header**: `Authorization: Bearer <authToken>`
+- **Query**: `?userId=<userId>&targetUserId=<targetUserId>`
+- **Response**:
+```json
+{
+  "status": true,
+  "message": "User unblocked successfully."
+}
+```
+
+#### 1.14 Get Blocked Users
+- **Endpoint**: `GET /client/user/blockedUsers`
+- **Headers**: `key: <secretKey>`
+- **Auth Header**: `Authorization: Bearer <authToken>`
+- **Query**: `?userId=<userId>`
+- **Response**:
+```json
+{
+  "status": true,
+  "message": "Blocked users fetched successfully.",
+  "blockedUsers": [
+    {
+      "_id": "user_id",
+      "name": "John",
+      "userName": "john123",
+      "image": "https://..."
+    }
+  ]
 }
 ```
 

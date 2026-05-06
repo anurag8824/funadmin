@@ -37,6 +37,10 @@ exports.commentOfPostOrVideo = async (req, res) => {
         PostOrVideoComment.create({
           userId: userId,
           postId: postId,
+          parentCommentId:
+            req.query.parentCommentId && mongoose.Types.ObjectId.isValid(req.query.parentCommentId)
+              ? new mongoose.Types.ObjectId(req.query.parentCommentId)
+              : null,
           commentText: req.query.commentText.trim(),
         }),
       ]);
@@ -105,6 +109,10 @@ exports.commentOfPostOrVideo = async (req, res) => {
         PostOrVideoComment.create({
           userId: userId,
           videoId: videoId,
+          parentCommentId:
+            req.query.parentCommentId && mongoose.Types.ObjectId.isValid(req.query.parentCommentId)
+              ? new mongoose.Types.ObjectId(req.query.parentCommentId)
+              : null,
           commentText: req.query.commentText.trim(),
         }),
       ]);
@@ -309,6 +317,7 @@ exports.getpostOrvideoComments = async (req, res) => {
               userId: "$user._id",
               name: "$user.name",
               userName: "$user.userName",
+              parentCommentId: 1,
               isProfileImageBanned: "$user.isProfileImageBanned",
               userImage: "$user.image",
               isVerified: "$user.isVerified",
@@ -444,6 +453,7 @@ exports.getpostOrvideoComments = async (req, res) => {
               userId: "$user._id",
               name: "$user.name",
               userName: "$user.userName",
+              parentCommentId: 1,
               userImage: "$user.image",
               commentText: 1,
               createdAt: 1,

@@ -3,6 +3,7 @@ const express = require("express");
 const route = express.Router();
 
 const checkAccessWithSecretKey = require("../../checkAccess");
+const clientAuthMiddleware = require("../../middleware/clientAuth.middleware");
 
 //controller
 const UserController = require("../../controllers/client/user.controller");
@@ -39,6 +40,15 @@ route.delete("/deleteUserAccount", checkAccessWithSecretKey(), UserController.de
 
 //verify username ( always be unique )
 route.get("/validateUsername", checkAccessWithSecretKey(), UserController.validateUsername);
+
+// block user
+route.post("/blockUser", checkAccessWithSecretKey(), clientAuthMiddleware, UserController.blockUser);
+
+// unblock user
+route.post("/unblockUser", checkAccessWithSecretKey(), clientAuthMiddleware, UserController.unblockUser);
+
+// list blocked users
+route.get("/blockedUsers", checkAccessWithSecretKey(), clientAuthMiddleware, UserController.getBlockedUsers);
 
 //generate caption/hashTag 
 route.get("/generateMediaTags", checkAccessWithSecretKey(), UserController.generateMediaTags);

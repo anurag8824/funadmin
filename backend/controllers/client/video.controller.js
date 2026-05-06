@@ -29,6 +29,24 @@ const { deleteFromStorage } = require("../../util/storageHelper");
 //generateUniqueVideoOrPostId
 const { generateUniqueVideoOrPostId } = require("../../util/generateUniqueVideoOrPostId");
 
+const toObjectId = (id) => new mongoose.Types.ObjectId(id);
+const hasUserBlocked = (userDoc, targetId) =>
+  (userDoc?.blockedUsers || []).some((id) => String(id) === String(targetId));
+
+async function resolveBlockContext(viewerId) {
+  const viewer = await User.findById(viewerId).select("_id isBlock blockedUsers").lean();
+  if (!viewer) return { viewer: null, excludedUserIds: [] };
+
+  const blockedByViewer = (viewer.blockedUsers || []).map((id) => String(id));
+  const blockedViewerByUsers = await User.find({ blockedUsers: toObjectId(viewerId) }).select("_id").lean();
+  const blockedViewerByIds = blockedViewerByUsers.map((u) => String(u._id));
+
+  return {
+    viewer,
+    excludedUserIds: [...new Set([...blockedByViewer, ...blockedViewerByIds])].map((id) => toObjectId(id)),
+  };
+}
+
 //upload video by particular user
 exports.uploadvideo = async (req, res, next) => {
   try {
@@ -773,12 +791,13 @@ exports.videosOfUser = async (req, res, next) => {
     const userId = new mongoose.Types.ObjectId(req.query.userId); // Logged-in userId
     const userIdOfVideo = new mongoose.Types.ObjectId(req.query.toUserId); // userId of video
 
-    const [user, videos] = await Promise.all([
-      User.findOne({ _id: userId }).lean(),
+    const [{ viewer: user, excludedUserIds }, videos] = await Promise.all([
+      resolveBlockContext(userId),
       Video.aggregate([
         {
           $match: {
             userId: userIdOfVideo,
+            ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
             ...(req.query.userId === req.query.toUserId ? {} : { isBanned: false }),
           },
         },
@@ -941,9 +960,17 @@ exports.getAllVideos = async (req, res, next) => {
         return res.status(200).json({ status: false, message: "you are blocked by the admin." });
       }
 
+      const blockedByUserIds = (user.blockedUsers || []).map((id) => String(id));
+      const blockedUserByOthers = await User.find({ blockedUsers: user._id }).select("_id").lean();
+      const blockedByOthersIds = blockedUserByOthers.map((u) => String(u._id));
+      const excludedFeedUserIds = [...new Set([...blockedByUserIds, ...blockedByOthersIds])].map((id) => toObjectId(id));
+
       const data = [
         {
-          $match: { isBanned: false },
+          $match: {
+            isBanned: false,
+            ...(excludedFeedUserIds.length ? { userId: { $nin: excludedFeedUserIds } } : {}),
+          },
         },
         {
           $lookup: {
@@ -1175,12 +1202,18 @@ exports.getAllVideos = async (req, res, next) => {
         return res.status(200).json({ status: false, message: "you are blocked by the admin." });
       }
 
+      const blockedByUserIds = (user.blockedUsers || []).map((id) => String(id));
+      const blockedUserByOthers = await User.find({ blockedUsers: user._id }).select("_id").lean();
+      const blockedByOthersIds = blockedUserByOthers.map((u) => String(u._id));
+      const excludedFeedUserIds = [...new Set([...blockedByUserIds, ...blockedByOthersIds])].map((id) => toObjectId(id));
+
       // Production optimization:
       // - paginate at DB level (skip/limit) instead of loading full feed then slicing
       // - stable sort by recency (createdAt desc) for cacheability and deterministic UX
       const baseMatch = {
         isBanned: false,
         ...(settingJSON.isFakeData ? {} : { isFake: false }),
+        ...(excludedFeedUserIds.length ? { userId: { $nin: excludedFeedUserIds } } : {}),
       };
 
       const paginatedVideos = await Video.aggregate([
@@ -1349,7 +1382,7 @@ exports.getReelsFeedLite = async (req, res) => {
       ? new mongoose.Types.ObjectId(req.query.videoId)
       : null;
 
-    const user = await User.findOne({ _id: userId }).select("_id isBlock").lean();
+    const { viewer: user, excludedUserIds } = await resolveBlockContext(userId);
     if (!user) {
       return res.status(200).json({ status: false, message: "User does not found." });
     }
@@ -1360,6 +1393,7 @@ exports.getReelsFeedLite = async (req, res) => {
     const baseMatch = {
       isBanned: false,
       ...(settingJSON.isFakeData ? {} : { isFake: false }),
+      ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
     };
 
     if (req.query.videoId && !requestedVideoId) {
@@ -2558,8 +2592,8 @@ exports.getVideoById = async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.query.userId);
     const vidId = new mongoose.Types.ObjectId(videoId);
 
-    const [user, videos] = await Promise.all([
-      User.findById(userId).lean(),
+    const [{ viewer: user }, videos] = await Promise.all([
+      resolveBlockContext(userId),
       Video.aggregate([
         { $match: { _id: vidId } },
         {
@@ -2646,6 +2680,14 @@ exports.getVideoById = async (req, res) => {
     if (!user) return res.status(200).json({ status: false, message: "User not found." });
     if (user.isBlock) return res.status(200).json({ status: false, message: "You are blocked by the admin." });
     if (!videos || videos.length === 0) return res.status(200).json({ status: false, message: "Video not found." });
+    const videoOwnerId = videos[0].userId;
+    if (hasUserBlocked(user, videoOwnerId)) {
+      return res.status(200).json({ status: false, message: "This video is unavailable." });
+    }
+    const owner = await User.findById(videoOwnerId).select("_id blockedUsers").lean();
+    if (hasUserBlocked(owner, userId)) {
+      return res.status(200).json({ status: false, message: "This video is unavailable." });
+    }
 
     return res.status(200).json({ status: true, message: "Video retrieved successfully.", data: videos[0] });
   } catch (error) {

@@ -28,6 +28,7 @@ const StoryReaction = require("../../models/storyReaction.model");
 
 //mongoose
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
 
 //Cryptr
 const Cryptr = require("cryptr");
@@ -164,11 +165,13 @@ exports.loginOrSignUp = async (req, res) => {
       user.lastlogin = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
 
       const user_ = await userFunction(user, req);
+      const authToken = jwt.sign({ _id: user_._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 
       return res.status(200).json({
         status: true,
         message: "The user has successfully logged in.",
         user: user_,
+        authToken,
         signUp: false,
       });
     } else {
@@ -182,12 +185,14 @@ exports.loginOrSignUp = async (req, res) => {
       newUser.coin = bonusCoins;
 
       const user = await userFunction(newUser, req);
+      const authToken = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 
       res.status(200).json({
         status: true,
         message: "A new user has registered an account.",
         signUp: true,
         user: user,
+        authToken,
       });
 
       await History.create({
@@ -442,8 +447,9 @@ exports.getUserProfile = async (req, res, next) => {
     const userId = new mongoose.Types.ObjectId(req.query.userId);
     const userIdOfPostOrVideo = new mongoose.Types.ObjectId(req.query.toUserId);
 
-    const [user, isFollow, totalFollowers, totalFollowing, totalLikesOfVideoPost] = await Promise.all([
+    const [user, viewerUser, isFollow, totalFollowers, totalFollowing, totalLikesOfVideoPost] = await Promise.all([
       User.findOne({ _id: userId }).lean(),
+      User.findOne({ _id: userIdOfPostOrVideo }).lean(),
       FollowerFollowing.findOne({ fromUserId: userIdOfPostOrVideo, toUserId: userId }).lean(),
       FollowerFollowing.countDocuments({ toUserId: userId }),
       FollowerFollowing.countDocuments({ fromUserId: userId }),
@@ -477,10 +483,113 @@ exports.getUserProfile = async (req, res, next) => {
       return res.status(200).json({ status: false, message: "you are blocked by the admin." });
     }
 
+    const targetBlockedViewer = (user.blockedUsers || []).some((id) => id.toString() === userIdOfPostOrVideo.toString());
+    const viewerBlockedTarget = (viewerUser?.blockedUsers || []).some((id) => id.toString() === userId.toString());
+    if (targetBlockedViewer || viewerBlockedTarget) {
+      return res.status(200).json({
+        status: false,
+        message: "This profile is unavailable.",
+      });
+    }
+
     return res.status(200).json({
       status: true,
       message: "Retrieve the profile information.",
       userProfileData: userProfileData,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};
+
+exports.blockUser = async (req, res) => {
+  try {
+    const { userId, targetUserId } = req.query;
+    if (!userId || !targetUserId) {
+      return res.status(200).json({ status: false, message: "userId and targetUserId are required." });
+    }
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(targetUserId)) {
+      return res.status(200).json({ status: false, message: "Invalid userId or targetUserId format." });
+    }
+    if (userId.toString() === targetUserId.toString()) {
+      return res.status(200).json({ status: false, message: "You cannot block yourself." });
+    }
+
+    const [user, target] = await Promise.all([User.findById(userId), User.findById(targetUserId)]);
+    if (!user || !target) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
+    }
+
+    await User.updateOne({ _id: userId }, { $addToSet: { blockedUsers: target._id } });
+    await FollowerFollowing.deleteMany({
+      $or: [
+        { fromUserId: user._id, toUserId: target._id },
+        { fromUserId: target._id, toUserId: user._id },
+      ],
+    });
+
+    return res.status(200).json({ status: true, message: "User blocked successfully." });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};
+
+exports.unblockUser = async (req, res) => {
+  try {
+    const { userId, targetUserId } = req.query;
+    if (!userId || !targetUserId) {
+      return res.status(200).json({ status: false, message: "userId and targetUserId are required." });
+    }
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(targetUserId)) {
+      return res.status(200).json({ status: false, message: "Invalid userId or targetUserId format." });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
+    }
+
+    await User.updateOne({ _id: user._id }, { $pull: { blockedUsers: new mongoose.Types.ObjectId(targetUserId) } });
+    return res.status(200).json({ status: true, message: "User unblocked successfully." });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};
+
+exports.getBlockedUsers = async (req, res) => {
+  try {
+    if (!req.query.userId) {
+      return res.status(200).json({ status: false, message: "userId must be required." });
+    }
+    if (!mongoose.Types.ObjectId.isValid(req.query.userId)) {
+      return res.status(200).json({ status: false, message: "Invalid userId format." });
+    }
+
+    const user = await User.findById(req.query.userId).populate("blockedUsers", "_id name userName image").lean();
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Blocked users fetched successfully.",
+      blockedUsers: (user.blockedUsers || []).map((u) => ({
+        _id: u._id,
+        name: u.name || "",
+        userName: u.userName || "",
+        image: u.image || "",
+      })),
     });
   } catch (error) {
     console.log(error);
