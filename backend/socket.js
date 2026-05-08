@@ -65,8 +65,8 @@ io.on("connection", async (socket) => {
     }
     console.log("parseData", parseData);
 
-    if (!parseData?.senderUserId || !parseData?.receiverUserId || !parseData?.chatTopicId) {
-      console.log("message payload missing senderUserId/receiverUserId/chatTopicId");
+    if (!parseData?.senderUserId || !parseData?.receiverUserId) {
+      console.log("message payload missing senderUserId/receiverUserId");
       return;
     }
 
@@ -75,14 +75,28 @@ io.on("connection", async (socket) => {
       return;
     }
 
-    const [follow, chatTopic] = await Promise.all([
+    const [follow, foundChatTopic] = await Promise.all([
       FollowerFollowing.findOne({ fromUserId: parseData?.senderUserId, toUserId: parseData?.receiverUserId }),
-      ChatTopic.findById(parseData?.chatTopicId).populate("senderUserId", "_id name userName image fcmToken isBlock").populate("receiverUserId", "_id name userName image fcmToken isBlock"),
+      parseData?.chatTopicId
+        ? ChatTopic.findById(parseData?.chatTopicId).populate("senderUserId", "_id name userName image fcmToken isBlock").populate("receiverUserId", "_id name userName image fcmToken isBlock")
+        : ChatTopic.findOne({
+            $or: [
+              { $and: [{ senderUserId: parseData?.senderUserId }, { receiverUserId: parseData?.receiverUserId }] },
+              { $and: [{ senderUserId: parseData?.receiverUserId }, { receiverUserId: parseData?.senderUserId }] },
+            ],
+          })
+            .populate("senderUserId", "_id name userName image fcmToken isBlock")
+            .populate("receiverUserId", "_id name userName image fcmToken isBlock"),
     ]);
 
+    let chatTopic = foundChatTopic;
     if (!chatTopic) {
-      console.log("chatTopic not found for message event");
-      return;
+      const created = await ChatTopic.create({
+        senderUserId: parseData?.senderUserId,
+        receiverUserId: parseData?.receiverUserId,
+        isAccepted: !!follow,
+      });
+      chatTopic = await ChatTopic.findById(created._id).populate("senderUserId", "_id name userName image fcmToken isBlock").populate("receiverUserId", "_id name userName image fcmToken isBlock");
     }
 
     if (!follow && !chatTopic.isAccepted) {
@@ -271,6 +285,27 @@ io.on("connection", async (socket) => {
       }
     } catch (error) {
       console.error("Error updating messages:", error);
+    }
+  });
+
+  socket.on("chatTyping", async (data) => {
+    try {
+      const parsedData = typeof data === "string" ? JSON.parse(data) : data;
+      const senderUserId = parsedData?.senderUserId;
+      const receiverUserId = parsedData?.receiverUserId;
+      const isTyping = !!parsedData?.isTyping;
+
+      if (!senderUserId || !receiverUserId) {
+        return;
+      }
+
+      io.to(`globalRoom:${receiverUserId}`).emit("chatTyping", {
+        senderUserId,
+        receiverUserId,
+        isTyping,
+      });
+    } catch (error) {
+      console.error("Error in chatTyping event:", error);
     }
   });
 

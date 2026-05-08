@@ -456,28 +456,28 @@ exports.getUserProfile = async (req, res, next) => {
       LikeHistoryOfPostOrVideo.countDocuments({ uploaderId: userId }),
     ]);
 
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+
     const userProfileData = {
       user: {
         name: user?.name,
-        userName: user.userName,
-        bio: user.bio,
-        gender: user.gender,
-        image: user.image,
-        countryFlagImage: user.countryFlagImage,
-        country: user.country,
-        isVerified: user.isVerified,
+        userName: user?.userName,
+        bio: user?.bio,
+        gender: user?.gender,
+        image: user?.image,
+        countryFlagImage: user?.countryFlagImage,
+        country: user?.country,
+        isVerified: user?.isVerified,
         isFollow: !!isFollow,
-        isFake: user.isFake,
-        isProfileImageBanned: user.isProfileImageBanned,
+        isFake: user?.isFake,
+        isProfileImageBanned: user?.isProfileImageBanned,
       },
       totalFollowers,
       totalFollowing,
       totalLikesOfVideoPost,
     };
-
-    if (!user) {
-      return res.status(200).json({ status: false, message: "User does not found." });
-    }
 
     if (user.isBlock) {
       return res.status(200).json({ status: false, message: "you are blocked by the admin." });

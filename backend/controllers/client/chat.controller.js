@@ -16,11 +16,30 @@ const { deleteFromStorage } = require("../../util/storageHelper");
 
 //mongoose
 const mongoose = require("mongoose");
+const axios = require("axios");
 
 const CHAT_MESSAGE_TYPES = {
   TEXT: 1,
   IMAGE: 2,
   AUDIO: 3,
+};
+
+const emitChatRealtime = ({ eventName = "message", messageId, senderUserId, receiverUserId, messageType, message, image, audio }) => {
+  const io = global.io;
+  if (!io || !senderUserId || !receiverUserId) return;
+  const payload = {
+    data: {
+      senderUserId: senderUserId.toString(),
+      receiverUserId: receiverUserId.toString(),
+      messageType: Number(messageType) || CHAT_MESSAGE_TYPES.TEXT,
+      message: message || "",
+      image: image || "",
+      audio: audio || "",
+    },
+    messageId: messageId ? messageId.toString() : undefined,
+  };
+  io.in(`globalRoom:${senderUserId}`).emit(eventName, payload);
+  io.in(`globalRoom:${receiverUserId}`).emit(eventName, payload);
 };
 
 const getChatNotificationBody = (messageType, text) => {
@@ -167,6 +186,17 @@ exports.createChat = async (req, res) => {
         chat: messageRequest,
       });
 
+      emitChatRealtime({
+        eventName: "messageRequest",
+        messageId: messageRequest?._id,
+        senderUserId: senderUser._id,
+        receiverUserId: receiverUser._id,
+        messageType,
+        message: messageRequest.message,
+        image: messageRequest.image,
+        audio: messageRequest.audio,
+      });
+
       const requestNotification = new Notification();
       requestNotification.userId = receiverUser._id;
       requestNotification.otherUserId = senderUser._id;
@@ -197,7 +227,10 @@ exports.createChat = async (req, res) => {
           .then((response) => {
             console.log("Successfully sent notification with response: ", response);
           })
-          .catch((error) => {
+          .catch(async (error) => {
+            if (error?.errorInfo?.code === "messaging/registration-token-not-registered") {
+              await User.updateOne({ _id: receiverUser._id }, { $set: { fcmToken: null } });
+            }
             console.log("Error sending notification: ", error);
           });
       }
@@ -332,6 +365,17 @@ exports.createChat = async (req, res) => {
         chat: chat,
       });
 
+      emitChatRealtime({
+        eventName: "message",
+        messageId: chat?._id,
+        senderUserId: senderUser._id,
+        receiverUserId: receiverUser._id,
+        messageType,
+        message: chat.message,
+        image: chat.image,
+        audio: chat.audio,
+      });
+
       const chatNotification = new Notification();
       chatNotification.userId = receiverUser._id;
       chatNotification.otherUserId = senderUser._id;
@@ -362,7 +406,10 @@ exports.createChat = async (req, res) => {
           .then((response) => {
             console.log("Successfully sent with response: ", response);
           })
-          .catch((error) => {
+          .catch(async (error) => {
+            if (error?.errorInfo?.code === "messaging/registration-token-not-registered") {
+              await User.updateOne({ _id: receiverUser._id }, { $set: { fcmToken: null } });
+            }
             console.log("Error sending message:      ", error);
           });
       }
@@ -516,7 +563,20 @@ exports.getOldChat = async (req, res) => {
       chatTopic.receiverUserId = receiverUser._id;
     }
 
-    await Promise.all([chatTopic.save(), Chat.updateMany({ $and: [{ chatTopicId: chatTopic._id }, { isRead: false }] }, { $set: { isRead: true } }, { new: true })]);
+    await Promise.all([
+      chatTopic.save(),
+      Chat.updateMany(
+        {
+          $and: [
+            { chatTopicId: chatTopic._id },
+            { isRead: false },
+            { senderUserId: { $ne: senderUserId } },
+          ],
+        },
+        { $set: { isRead: true } },
+        { new: true }
+      ),
+    ]);
 
     const chat = await Chat.find({ chatTopicId: chatTopic._id })
       .populate("storyOwnerId", "name userName image isProfileImageBanned")
@@ -532,8 +592,6 @@ exports.getOldChat = async (req, res) => {
       .skip((start - 1) * limit)
       .limit(limit)
       .lean();
-
-    console.log("chat  ", chat);
 
     return res.status(200).json({ status: true, message: "Retrive old chat between the users.", chatTopic: chatTopic._id, chat: chat });
   } catch (error) {

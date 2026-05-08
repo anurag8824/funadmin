@@ -722,3 +722,185 @@ exports.recentChatWithUsers = async (req, res, next) => {
     return res.status(500).json({ status: false, message: "Internal Server Error" });
   }
 };
+
+// get inbox list: recent chats first, then followed users alphabetically
+exports.getInboxList = async (req, res) => {
+  try {
+    if (!req.query.userId) {
+      return res.status(200).json({ status: false, message: "UserId must be required." });
+    }
+
+    const userId = new mongoose.Types.ObjectId(req.query.userId);
+
+    const [user, chatRows, followingRows] = await Promise.all([
+      User.findById(userId).select("_id isBlock").lean(),
+      ChatTopic.aggregate([
+        {
+          $match: {
+            chatId: { $ne: null },
+            $or: [{ senderUserId: userId }, { receiverUserId: userId }],
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            let: {
+              senderUserId: "$senderUserId",
+              receiverUserId: "$receiverUserId",
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $cond: {
+                      if: { $eq: ["$$senderUserId", userId] },
+                      then: { $eq: ["$$receiverUserId", "$_id"] },
+                      else: { $eq: ["$$senderUserId", "$_id"] },
+                    },
+                  },
+                },
+              },
+            ],
+            as: "peerUser",
+          },
+        },
+        {
+          $unwind: {
+            path: "$peerUser",
+            preserveNullAndEmptyArrays: false,
+          },
+        },
+        {
+          $lookup: {
+            from: "chats",
+            let: { topicId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $eq: ["$chatTopicId", "$$topicId"],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "lastChat",
+          },
+        },
+        {
+          $unwind: {
+            path: "$lastChat",
+            preserveNullAndEmptyArrays: false,
+          },
+        },
+        {
+          $lookup: {
+            from: "chats",
+            let: { topicId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [{ $eq: ["$chatTopicId", "$$topicId"] }, { $eq: ["$isRead", false] }, { $ne: ["$senderUserId", userId] }],
+                  },
+                },
+              },
+              { $count: "unreadCount" },
+            ],
+            as: "unreads",
+          },
+        },
+        {
+          $addFields: {
+            unreadCount: {
+              $cond: [{ $gt: [{ $size: "$unreads" }, 0] }, { $arrayElemAt: ["$unreads.unreadCount", 0] }, 0],
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            userId: "$peerUser._id",
+            userName: "$peerUser.userName",
+            image: "$peerUser.image",
+            message: "$lastChat.message",
+            messageType: "$lastChat.messageType",
+            unreadCount: 1,
+            lastChatMessageTime: "$lastChat.createdAt",
+          },
+        },
+        { $sort: { lastChatMessageTime: -1 } },
+      ]),
+      FollowerFollowing.find({ fromUserId: userId }).select("toUserId").populate("toUserId", "_id userName image").lean(),
+    ]);
+
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
+    }
+
+    const chatByPeerId = new Map();
+    const orderedChatRows = [];
+    for (const row of chatRows) {
+      const peerId = row?.userId?.toString?.() || "";
+      if (!peerId || chatByPeerId.has(peerId)) continue;
+      chatByPeerId.set(peerId, row);
+      orderedChatRows.push(row);
+    }
+
+    const followedWithoutChat = followingRows
+      .map((item) => item?.toUserId)
+      .filter((u) => u && u._id && !chatByPeerId.has(u._id.toString()))
+      .map((u) => ({
+        _id: u._id,
+        userId: u._id,
+        userName: u.userName || "",
+        image: u.image || "",
+        message: "",
+        messageType: 1,
+        unreadCount: 0,
+        lastChatMessageTime: null,
+      }))
+      .sort((a, b) => (a.userName || "").localeCompare(b.userName || "", undefined, { sensitivity: "base" }));
+
+    const now = dayjs();
+    const data = [...orderedChatRows, ...followedWithoutChat].map((item) => {
+      let formattedTime = "";
+      if (item.lastChatMessageTime) {
+        const chatTime = dayjs(item.lastChatMessageTime);
+        const dayDiff = now.startOf("day").diff(chatTime.startOf("day"), "day");
+        if (dayDiff <= 0) {
+          formattedTime = chatTime.format("h:mm A");
+        } else if (dayDiff == 1) {
+          formattedTime = "Yesterday";
+        } else if (dayDiff < 7) {
+          formattedTime = chatTime.format("ddd");
+        } else {
+          formattedTime = chatTime.format("DD/MM/YY");
+        }
+      }
+      return {
+      _id: item._id,
+      userId: item.userId,
+      userName: item.userName || "",
+      image: item.image || "",
+      message: item.message || "",
+      messageType: item.messageType || 1,
+      unreadCount: item.unreadCount || 0,
+      time: formattedTime,
+      };
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Inbox list fetched successfully.",
+      data,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};

@@ -10,6 +10,9 @@ const ChatTopicController = require("../../controllers/client/chatTopic.controll
 //get thumb list of chat between the users
 route.get("/getChatList", checkAccessWithSecretKey(), ChatTopicController.getChatList);
 
+//get inbox list (recent chats + followed users)
+route.get("/getInboxList", checkAccessWithSecretKey(), ChatTopicController.getInboxList);
+
 //search the users with chat has been done
 route.post("/chatWithUserSearch", checkAccessWithSecretKey(), ChatTopicController.chatWithUserSearch);
 
