@@ -70,8 +70,9 @@ io.on("connection", async (socket) => {
       return;
     }
 
-    if (Number(parseData?.messageType) !== 1) {
-      console.log("Only text messages are supported in socket message.");
+    const socketMessageType = Number(parseData?.messageType || 1);
+    if (![1, 4].includes(socketMessageType)) {
+      console.log("Only text and video messages are supported in socket message.");
       return;
     }
 
@@ -119,13 +120,16 @@ io.on("connection", async (socket) => {
         chatRequestTopic.receiverUserId = parseData?.receiverUserId;
       }
 
-      if (parseData?.messageType == 1) {
+      if (socketMessageType === 1 || socketMessageType === 4) {
         const messageRequest = new ChatRequest();
 
         messageRequest.senderUserId = parseData?.senderUserId;
-        messageRequest.messageType = 1;
-        messageRequest.message = parseData?.message;
+        messageRequest.messageType = socketMessageType;
+        messageRequest.message = socketMessageType === 1 ? parseData?.message : "";
         messageRequest.image = "";
+        messageRequest.audio = "";
+        messageRequest.video = socketMessageType === 4 ? parseData?.video || "" : "";
+        messageRequest.thumbnail = socketMessageType === 4 ? parseData?.thumbnail || "" : "";
         messageRequest.chatRequestTopicId = chatRequestTopic._id;
         messageRequest.date = new Date().toLocaleString();
 
@@ -136,6 +140,9 @@ io.on("connection", async (socket) => {
         chat.messageType = messageRequest.messageType;
         chat.message = messageRequest.message;
         chat.image = messageRequest.image;
+        chat.audio = messageRequest.audio;
+        chat.video = messageRequest.video;
+        chat.thumbnail = messageRequest.thumbnail;
         chat.chatTopicId = chatTopic?._id;
         chat.date = new Date().toLocaleString();
 
@@ -143,8 +150,21 @@ io.on("connection", async (socket) => {
 
         await Promise.all([chatRequestTopic.save(), messageRequest.save(), chatTopic.save(), chat.save()]);
 
-        io.in("globalRoom:" + chatTopic?.senderUserId?._id.toString()).emit("messageRequest", { data: data, messageId: messageRequest._id });
-        io.in("globalRoom:" + chatTopic?.receiverUserId?._id.toString()).emit("messageRequest", { data: data, messageId: messageRequest._id });
+        const realtimePayload = {
+          data: {
+            senderUserId: parseData?.senderUserId?.toString(),
+            receiverUserId: parseData?.receiverUserId?.toString(),
+            messageType: socketMessageType,
+            message: messageRequest.message || "",
+            image: messageRequest.image || "",
+            audio: messageRequest.audio || "",
+            video: messageRequest.video || "",
+            thumbnail: messageRequest.thumbnail || "",
+          },
+          messageId: messageRequest._id,
+        };
+        io.in("globalRoom:" + chatTopic?.senderUserId?._id.toString()).emit("messageRequest", realtimePayload);
+        io.in("globalRoom:" + chatTopic?.receiverUserId?._id.toString()).emit("messageRequest", realtimePayload);
 
         let receiverUser, senderUser;
         if (chatTopic.senderUserId._id.toString() === parseData.senderUserId.toString()) {
@@ -189,13 +209,16 @@ io.on("connection", async (socket) => {
     } else {
       console.log("Users follow each other in message.");
 
-      if (chatTopic && parseData?.messageType == 1) {
+      if (chatTopic && (socketMessageType === 1 || socketMessageType === 4)) {
         const chat = new Chat();
 
         chat.senderUserId = parseData?.senderUserId;
-        chat.messageType = 1;
-        chat.message = parseData?.message;
+        chat.messageType = socketMessageType;
+        chat.message = socketMessageType === 1 ? parseData?.message : "";
         chat.image = "";
+        chat.audio = "";
+        chat.video = socketMessageType === 4 ? parseData?.video || "" : "";
+        chat.thumbnail = socketMessageType === 4 ? parseData?.thumbnail || "" : "";
         chat.chatTopicId = chatTopic._id;
         chat.date = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
 
@@ -204,8 +227,21 @@ io.on("connection", async (socket) => {
 
         await Promise.all([chat.save(), chatTopic.save()]);
 
-        io.in("globalRoom:" + chatTopic?.senderUserId?._id.toString()).emit("message", { data: data, messageId: chat._id });
-        io.in("globalRoom:" + chatTopic?.receiverUserId?._id.toString()).emit("message", { data: data, messageId: chat._id });
+        const realtimePayload = {
+          data: {
+            senderUserId: parseData?.senderUserId?.toString(),
+            receiverUserId: parseData?.receiverUserId?.toString(),
+            messageType: socketMessageType,
+            message: chat.message || "",
+            image: chat.image || "",
+            audio: chat.audio || "",
+            video: chat.video || "",
+            thumbnail: chat.thumbnail || "",
+          },
+          messageId: chat._id,
+        };
+        io.in("globalRoom:" + chatTopic?.senderUserId?._id.toString()).emit("message", realtimePayload);
+        io.in("globalRoom:" + chatTopic?.receiverUserId?._id.toString()).emit("message", realtimePayload);
 
         let receiverUser, senderUser;
         if (chatTopic.senderUserId._id.toString() === parseData.senderUserId.toString()) {
@@ -223,7 +259,7 @@ io.on("connection", async (socket) => {
             token: receiverUser.fcmToken,
             notification: {
               title: `${senderUser.name} sent you a message 📩`,
-              body: `🗨️ ${chat.message}`,
+              body: socketMessageType === 4 ? "🎬 Sent a video" : `🗨️ ${chat.message}`,
               image: senderUser?.image,
             },
             data: {

@@ -9,10 +9,12 @@ const chatSchema = mongoose.Schema(
     storyOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     storyId: { type: mongoose.Schema.Types.ObjectId, ref: "Story", default: null },
 
-    messageType: { type: Number, enum: MESSAGE_TYPE }, //1.message 2.image 3.audio
+    messageType: { type: Number, enum: MESSAGE_TYPE }, //1.message 2.image 3.audio 4.video
     message: { type: String, default: "" },
     audio: { type: String, default: "" },
     image: { type: String, default: "" },
+    video: { type: String, default: "" },
+    thumbnail: { type: String, default: "" },
     isChatMediaBanned: { type: Boolean, default: false },
 
     isRead: { type: Boolean, default: false },

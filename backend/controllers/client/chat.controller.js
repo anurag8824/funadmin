@@ -22,9 +22,10 @@ const CHAT_MESSAGE_TYPES = {
   TEXT: 1,
   IMAGE: 2,
   AUDIO: 3,
+  VIDEO: 4,
 };
 
-const emitChatRealtime = ({ eventName = "message", messageId, senderUserId, receiverUserId, messageType, message, image, audio }) => {
+const emitChatRealtime = ({ eventName = "message", messageId, senderUserId, receiverUserId, messageType, message, image, audio, video, thumbnail }) => {
   const io = global.io;
   if (!io || !senderUserId || !receiverUserId) return;
   const payload = {
@@ -35,6 +36,8 @@ const emitChatRealtime = ({ eventName = "message", messageId, senderUserId, rece
       message: message || "",
       image: image || "",
       audio: audio || "",
+      video: video || "",
+      thumbnail: thumbnail || "",
     },
     messageId: messageId ? messageId.toString() : undefined,
   };
@@ -45,6 +48,7 @@ const emitChatRealtime = ({ eventName = "message", messageId, senderUserId, rece
 const getChatNotificationBody = (messageType, text) => {
   if (messageType === CHAT_MESSAGE_TYPES.IMAGE) return "📷 Sent a photo";
   if (messageType === CHAT_MESSAGE_TYPES.AUDIO) return "🎵 Sent an audio clip";
+  if (messageType === CHAT_MESSAGE_TYPES.VIDEO) return "🎬 Sent a video";
   return `🗨️ ${text}`;
 };
 
@@ -68,14 +72,14 @@ exports.createChat = async (req, res) => {
     const senderUserId = new mongoose.Types.ObjectId(req.query.senderUserId);
     const receiverUserId = new mongoose.Types.ObjectId(req.query.receiverUserId);
 
-    if (![CHAT_MESSAGE_TYPES.TEXT, CHAT_MESSAGE_TYPES.IMAGE, CHAT_MESSAGE_TYPES.AUDIO].includes(messageType)) {
+    if (![CHAT_MESSAGE_TYPES.TEXT, CHAT_MESSAGE_TYPES.IMAGE, CHAT_MESSAGE_TYPES.AUDIO, CHAT_MESSAGE_TYPES.VIDEO].includes(messageType)) {
       if (req?.body?.image) {
         await deleteFromStorage(req?.body?.image);
       }
       if (req?.body?.audio) {
         await deleteFromStorage(req?.body?.audio);
       }
-      return res.status(200).json({ status: false, message: "Invalid messageType. Use 1=text, 2=image, 3=audio." });
+      return res.status(200).json({ status: false, message: "Invalid messageType. Use 1=text, 2=image, 3=audio, 4=video." });
     }
 
     if (messageType === CHAT_MESSAGE_TYPES.TEXT && !incomingText) {
@@ -84,11 +88,16 @@ exports.createChat = async (req, res) => {
 
     const imageUrl = typeof req?.body?.image === "string" ? req.body.image.trim() : "";
     const audioUrl = typeof req?.body?.audio === "string" ? req.body.audio.trim() : "";
+    const videoUrl = typeof req?.body?.video === "string" ? req.body.video.trim() : "";
+    const thumbnailUrl = typeof req?.body?.thumbnail === "string" ? req.body.thumbnail.trim() : "";
     if (messageType === CHAT_MESSAGE_TYPES.IMAGE && !imageUrl) {
       return res.status(200).json({ status: false, message: "image is required for image chat." });
     }
     if (messageType === CHAT_MESSAGE_TYPES.AUDIO && !audioUrl) {
       return res.status(200).json({ status: false, message: "audio is required for audio chat." });
+    }
+    if (messageType === CHAT_MESSAGE_TYPES.VIDEO && !videoUrl) {
+      return res.status(200).json({ status: false, message: "video is required for video chat." });
     }
 
     let chatTopic;
@@ -151,6 +160,8 @@ exports.createChat = async (req, res) => {
       messageRequest.message = messageType === CHAT_MESSAGE_TYPES.TEXT ? incomingText : "";
       messageRequest.image = messageType === CHAT_MESSAGE_TYPES.IMAGE ? imageUrl : "";
       messageRequest.audio = messageType === CHAT_MESSAGE_TYPES.AUDIO ? audioUrl : "";
+      messageRequest.video = messageType === CHAT_MESSAGE_TYPES.VIDEO ? videoUrl : "";
+      messageRequest.thumbnail = messageType === CHAT_MESSAGE_TYPES.VIDEO ? thumbnailUrl : "";
 
       messageRequest.chatRequestTopicId = chatRequestTopic._id;
       messageRequest.date = new Date().toLocaleString();
@@ -173,6 +184,8 @@ exports.createChat = async (req, res) => {
       chat.message = messageRequest.message;
       chat.image = messageRequest.image;
       chat.audio = messageRequest.audio;
+      chat.video = messageRequest.video;
+      chat.thumbnail = messageRequest.thumbnail;
       chat.chatTopicId = chatTopic._id;
       chat.date = new Date().toLocaleString();
 
@@ -195,6 +208,8 @@ exports.createChat = async (req, res) => {
         message: messageRequest.message,
         image: messageRequest.image,
         audio: messageRequest.audio,
+        video: messageRequest.video,
+        thumbnail: messageRequest.thumbnail,
       });
 
       const requestNotification = new Notification();
@@ -350,6 +365,8 @@ exports.createChat = async (req, res) => {
       chat.message = messageType === CHAT_MESSAGE_TYPES.TEXT ? incomingText : "";
       chat.image = messageType === CHAT_MESSAGE_TYPES.IMAGE ? imageUrl : "";
       chat.audio = messageType === CHAT_MESSAGE_TYPES.AUDIO ? audioUrl : "";
+      chat.video = messageType === CHAT_MESSAGE_TYPES.VIDEO ? videoUrl : "";
+      chat.thumbnail = messageType === CHAT_MESSAGE_TYPES.VIDEO ? thumbnailUrl : "";
 
       chat.chatTopicId = chatTopic._id;
       chat.date = new Date().toLocaleString();
@@ -374,6 +391,8 @@ exports.createChat = async (req, res) => {
         message: chat.message,
         image: chat.image,
         audio: chat.audio,
+        video: chat.video,
+        thumbnail: chat.thumbnail,
       });
 
       const chatNotification = new Notification();
