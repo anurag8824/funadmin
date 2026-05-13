@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Note = require("../../models/note.model");
 const User = require("../../models/user.model");
 const FollowerFollowing = require("../../models/followerFollowing.model");
+const ChatTopic = require("../../models/chatTopic.model");
 
 exports.setNote = async (req, res) => {
   try {
@@ -56,8 +57,34 @@ exports.getNotesFeed = async (req, res) => {
     }
 
     const uid = new mongoose.Types.ObjectId(userId);
+
+    // People I follow (fromUserId = me)
     const following = await FollowerFollowing.find({ fromUserId: uid }).select("toUserId").lean();
-    const candidateIds = [uid, ...following.map((f) => f.toUserId).filter(Boolean)];
+    // People who follow me (toUserId = me) — symmetric visibility vs “following only”
+    const followers = await FollowerFollowing.find({ toUserId: uid }).select("fromUserId").lean();
+
+    // Anyone I’ve exchanged messages with (accepted chat topic) — fixes “note only on one side” for DMs
+    const chatTopics = await ChatTopic.find({
+      isAccepted: true,
+      chatId: { $ne: null },
+      $or: [{ senderUserId: uid }, { receiverUserId: uid }],
+    })
+      .select("senderUserId receiverUserId")
+      .lean();
+
+    const me = String(uid);
+    const candidateIdSet = new Set();
+    candidateIdSet.add(me);
+    following.forEach((f) => f.toUserId && candidateIdSet.add(String(f.toUserId)));
+    followers.forEach((f) => f.fromUserId && candidateIdSet.add(String(f.fromUserId)));
+    for (const t of chatTopics) {
+      const s = t.senderUserId != null ? String(t.senderUserId) : "";
+      const r = t.receiverUserId != null ? String(t.receiverUserId) : "";
+      if (s && s !== me) candidateIdSet.add(s);
+      if (r && r !== me) candidateIdSet.add(r);
+    }
+
+    const candidateIds = Array.from(candidateIdSet).map((s) => new mongoose.Types.ObjectId(s));
     const now = new Date();
 
     const raw = await Note.find({
