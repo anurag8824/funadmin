@@ -45,6 +45,46 @@ const emitChatRealtime = ({ eventName = "message", messageId, senderUserId, rece
   io.in(`globalRoom:${receiverUserId}`).emit(eventName, payload);
 };
 
+const emitPeerReadReceipt = (readByUserId, notifyUserId) => {
+  const io = global.io;
+  if (!io || !readByUserId || !notifyUserId) return;
+  io.in(`globalRoom:${notifyUserId.toString()}`).emit("messageReceipt", {
+    data: JSON.stringify({ type: "read", readByUserId: readByUserId.toString() }),
+  });
+};
+
+const emitChatMessageDeleted = (messageId, a, b) => {
+  const io = global.io;
+  if (!io || !messageId) return;
+  const payload = { data: JSON.stringify({ messageId: messageId.toString() }) };
+  io.in(`globalRoom:${a.toString()}`).emit("chatMessageDeleted", payload);
+  io.in(`globalRoom:${b.toString()}`).emit("chatMessageDeleted", payload);
+};
+
+const emitChatMessageEdited = (messageId, newText, a, b) => {
+  const io = global.io;
+  if (!io || !messageId) return;
+  const payload = { data: JSON.stringify({ messageId: messageId.toString(), message: newText || "" }) };
+  io.in(`globalRoom:${a.toString()}`).emit("chatMessageEdited", payload);
+  io.in(`globalRoom:${b.toString()}`).emit("chatMessageEdited", payload);
+};
+
+const emitReactionUpdate = (targetMessageId, reactions, userA, userB) => {
+  const io = global.io;
+  if (!io || !targetMessageId) return;
+  const payload = {
+    data: JSON.stringify({
+      targetMessageId: targetMessageId.toString(),
+      reactions: (reactions || []).map((r) => ({
+        userId: r.userId ? r.userId.toString() : "",
+        emoji: r.emoji || "",
+      })),
+    }),
+  };
+  io.in(`globalRoom:${userA.toString()}`).emit("chatReactionUpdate", payload);
+  io.in(`globalRoom:${userB.toString()}`).emit("chatReactionUpdate", payload);
+};
+
 const getChatNotificationBody = (messageType, text) => {
   if (messageType === CHAT_MESSAGE_TYPES.IMAGE) return "📷 Sent a photo";
   if (messageType === CHAT_MESSAGE_TYPES.AUDIO) return "🎵 Sent an audio clip";
@@ -188,6 +228,7 @@ exports.createChat = async (req, res) => {
       chat.thumbnail = messageRequest.thumbnail;
       chat.chatTopicId = chatTopic._id;
       chat.date = new Date().toLocaleString();
+      chat.isDelivered = false;
 
       chatTopic.chatId = chat._id;
 
@@ -370,6 +411,7 @@ exports.createChat = async (req, res) => {
 
       chat.chatTopicId = chatTopic._id;
       chat.date = new Date().toLocaleString();
+      chat.isDelivered = false;
 
       chatTopic.chatId = chat._id;
       chatTopic.isAccepted = true;
@@ -597,6 +639,8 @@ exports.getOldChat = async (req, res) => {
       ),
     ]);
 
+    emitPeerReadReceipt(senderUserId, receiverUserId);
+
     const chat = await Chat.find({ chatTopicId: chatTopic._id })
       .populate("storyOwnerId", "name userName image isProfileImageBanned")
       .populate({
@@ -613,6 +657,106 @@ exports.getOldChat = async (req, res) => {
       .lean();
 
     return res.status(200).json({ status: true, message: "Retrive old chat between the users.", chatTopic: chatTopic._id, chat: chat });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
+  }
+};
+
+exports.deleteChatMessage = async (req, res) => {
+  try {
+    const chatId = req.query.chatId;
+    const userId = req.query.userId;
+    if (!chatId || !userId) {
+      return res.status(200).json({ status: false, message: "chatId and userId are required." });
+    }
+    const chat = await Chat.findById(chatId).lean();
+    if (!chat) {
+      return res.status(200).json({ status: false, message: "Message not found." });
+    }
+    if (chat.senderUserId.toString() !== userId) {
+      return res.status(200).json({ status: false, message: "You can only delete your own messages." });
+    }
+    const topic = await ChatTopic.findById(chat.chatTopicId).lean();
+    if (!topic) {
+      await Chat.deleteOne({ _id: chatId });
+      return res.status(200).json({ status: true, message: "Deleted." });
+    }
+    const peer =
+      topic.senderUserId.toString() === userId ? topic.receiverUserId : topic.senderUserId;
+    await Chat.deleteOne({ _id: chatId });
+    emitChatMessageDeleted(chat._id, userId, peer);
+    return res.status(200).json({ status: true, message: "Message deleted." });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
+  }
+};
+
+exports.editChatMessage = async (req, res) => {
+  try {
+    const chatId = req.query.chatId;
+    const userId = req.query.userId;
+    const newText = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    if (!chatId || !userId) {
+      return res.status(200).json({ status: false, message: "chatId and userId are required." });
+    }
+    if (!newText) {
+      return res.status(200).json({ status: false, message: "message is required." });
+    }
+    const chat = await Chat.findById(chatId);
+    if (!chat) {
+      return res.status(200).json({ status: false, message: "Message not found." });
+    }
+    if (chat.senderUserId.toString() !== userId) {
+      return res.status(200).json({ status: false, message: "You can only edit your own messages." });
+    }
+    if (Number(chat.messageType) !== CHAT_MESSAGE_TYPES.TEXT) {
+      return res.status(200).json({ status: false, message: "Only text messages can be edited." });
+    }
+    chat.message = newText;
+    await chat.save();
+    const topic = await ChatTopic.findById(chat.chatTopicId).lean();
+    if (topic) {
+      const peer =
+        topic.senderUserId.toString() === userId ? topic.receiverUserId : topic.senderUserId;
+      emitChatMessageEdited(chat._id, newText, userId, peer);
+    }
+    return res.status(200).json({ status: true, message: "Updated.", chat });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
+  }
+};
+
+exports.reactToMessage = async (req, res) => {
+  try {
+    const senderUserId = req.query.senderUserId;
+    const targetMessageId = req.query.targetMessageId;
+    const emoji = typeof req.body?.emoji === "string" ? req.body.emoji.trim() : "";
+    if (!senderUserId || !targetMessageId || !emoji) {
+      return res.status(200).json({ status: false, message: "senderUserId, targetMessageId and emoji are required." });
+    }
+    const chat = await Chat.findById(targetMessageId);
+    if (!chat) {
+      return res.status(200).json({ status: false, message: "Message not found." });
+    }
+    const topic = await ChatTopic.findById(chat.chatTopicId).lean();
+    if (!topic) {
+      return res.status(200).json({ status: false, message: "Topic not found." });
+    }
+    const sid = senderUserId.toString();
+    const ok =
+      topic.senderUserId.toString() === sid || topic.receiverUserId.toString() === sid;
+    if (!ok) {
+      return res.status(200).json({ status: false, message: "Not allowed." });
+    }
+    const uid = new mongoose.Types.ObjectId(senderUserId);
+    chat.reactions = (chat.reactions || []).filter((r) => r.userId.toString() !== sid);
+    chat.reactions.push({ userId: uid, emoji });
+    await chat.save();
+    emitReactionUpdate(chat._id, chat.reactions, topic.senderUserId, topic.receiverUserId);
+    return res.status(200).json({ status: true, message: "OK", chat });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });

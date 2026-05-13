@@ -34,6 +34,7 @@ const storyView = require("./storyView.route");
 const file = require("./file.route");
 const save = require("./save.route");
 const audioCall = require("./audioCall.route");
+const note = require("./note.route");
 
 //exports client's route.js
 route.use("/user", user);
@@ -67,5 +68,6 @@ route.use("/storyView", storyView);
 route.use("/file", file);
 route.use("/save", save);
 route.use("/audioCall", audioCall);
+route.use("/note", note);
 
 module.exports = route;

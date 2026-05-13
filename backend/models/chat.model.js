@@ -18,6 +18,14 @@ const chatSchema = mongoose.Schema(
     isChatMediaBanned: { type: Boolean, default: false },
 
     isRead: { type: Boolean, default: false },
+    /** False until recipient client acks via socket `messageDelivered` (legacy docs: undefined = treat as delivered). */
+    isDelivered: { type: Boolean, default: false },
+    reactions: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        emoji: { type: String, default: "" },
+      },
+    ],
     date: { type: String, default: "" },
   },
   {

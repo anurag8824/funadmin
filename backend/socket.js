@@ -145,6 +145,7 @@ io.on("connection", async (socket) => {
         chat.thumbnail = messageRequest.thumbnail;
         chat.chatTopicId = chatTopic?._id;
         chat.date = new Date().toLocaleString();
+        chat.isDelivered = false;
 
         chatTopic.chatId = chat?._id;
 
@@ -221,6 +222,7 @@ io.on("connection", async (socket) => {
         chat.thumbnail = socketMessageType === 4 ? parseData?.thumbnail || "" : "";
         chat.chatTopicId = chatTopic._id;
         chat.date = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+        chat.isDelivered = false;
 
         chatTopic.chatId = chat._id;
         chatTopic.isAccepted = true;
@@ -283,6 +285,58 @@ io.on("connection", async (socket) => {
         io.in("globalRoom:" + chatTopic?.senderUserId?._id.toString()).emit("message", { data: data });
         io.in("globalRoom:" + chatTopic?.receiverUserId?._id.toString()).emit("message", { data: data });
       }
+    }
+  });
+
+  socket.on("messageDelivered", async (raw) => {
+    try {
+      const parseData = typeof raw === "string" ? JSON.parse(raw) : raw;
+      const messageId = parseData?.messageId;
+      const userId = parseData?.userId;
+      if (!messageId || !userId) return;
+      const chat = await Chat.findById(messageId).lean();
+      if (!chat) return;
+      if (chat.senderUserId.toString() === userId.toString()) return;
+      await Chat.updateOne({ _id: messageId }, { $set: { isDelivered: true } });
+      const payload = { data: JSON.stringify({ messageId: messageId.toString(), isDelivered: true }) };
+      io.in("globalRoom:" + chat.senderUserId.toString()).emit("messageReceipt", payload);
+      io.in("globalRoom:" + userId.toString()).emit("messageReceipt", payload);
+    } catch (e) {
+      console.error("messageDelivered error", e);
+    }
+  });
+
+  socket.on("chatReaction", async (raw) => {
+    try {
+      const d = typeof raw === "string" ? JSON.parse(raw) : raw;
+      const senderUserId = d?.senderUserId;
+      const targetMessageId = d?.targetMessageId;
+      const emoji = typeof d?.emoji === "string" ? d.emoji.trim() : "";
+      if (!senderUserId || !targetMessageId || !emoji) return;
+      const chat = await Chat.findById(targetMessageId);
+      if (!chat) return;
+      const topic = await ChatTopic.findById(chat.chatTopicId).lean();
+      if (!topic) return;
+      const sid = senderUserId.toString();
+      const ok = topic.senderUserId.toString() === sid || topic.receiverUserId.toString() === sid;
+      if (!ok) return;
+      const uid = new mongoose.Types.ObjectId(senderUserId);
+      chat.reactions = (chat.reactions || []).filter((r) => r.userId.toString() !== sid);
+      chat.reactions.push({ userId: uid, emoji });
+      await chat.save();
+      const payload = {
+        data: JSON.stringify({
+          targetMessageId: targetMessageId.toString(),
+          reactions: (chat.reactions || []).map((r) => ({
+            userId: r.userId ? r.userId.toString() : "",
+            emoji: r.emoji || "",
+          })),
+        }),
+      };
+      io.in("globalRoom:" + topic.senderUserId.toString()).emit("chatReactionUpdate", payload);
+      io.in("globalRoom:" + topic.receiverUserId.toString()).emit("chatReactionUpdate", payload);
+    } catch (e) {
+      console.error("chatReaction error", e);
     }
   });
 
