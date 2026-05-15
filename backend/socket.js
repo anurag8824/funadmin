@@ -1731,11 +1731,13 @@ io.on("connection", async (socket) => {
   socket.on("disconnect", async (reason) => {
     console.log(`socket disconnect`, { userId: id, socketId: socket?.id, reason });
 
-    if (globalRoom) {
-      const socket = await io.in(globalRoom).fetchSockets();
+    if (globalRoom && id) {
+      const remaining = await io.in(globalRoom).fetchSockets();
 
-      if (socket?.length == 0) {
+      if (remaining?.length == 0) {
         const userId = new mongoose.Types.ObjectId(id);
+
+        await User.findByIdAndUpdate(userId, { $set: { isOnline: false } }, { new: true }).catch(() => {});
 
         const user = await User.findById(userId);
         if (user) {

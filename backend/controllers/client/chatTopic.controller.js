@@ -1,4 +1,5 @@
 const ChatTopic = require("../../models/chatTopic.model");
+const Chat = require("../../models/chat.model");
 
 //import model
 const User = require("../../models/user.model");
@@ -839,9 +840,15 @@ exports.getInboxList = async (req, res) => {
             _id: 1,
             userId: "$peerUser._id",
             userName: "$peerUser.userName",
+            name: "$peerUser.name",
             image: "$peerUser.image",
+            isOnline: "$peerUser.isOnline",
             message: "$lastChat.message",
             messageType: "$lastChat.messageType",
+            lastMessageSenderUserId: "$lastChat.senderUserId",
+            lastMessageImage: "$lastChat.image",
+            lastMessageVideo: "$lastChat.video",
+            lastMessageThumbnail: "$lastChat.thumbnail",
             unreadCount: 1,
             lastChatMessageTime: "$lastChat.createdAt",
           },
@@ -883,30 +890,34 @@ exports.getInboxList = async (req, res) => {
       .sort((a, b) => (a.userName || "").localeCompare(b.userName || "", undefined, { sensitivity: "base" }));
 
     const now = dayjs();
+    const formatRelative = (createdAt) => {
+      if (!createdAt) return "";
+      const chatTime = dayjs(createdAt);
+      const diffMs = now.diff(chatTime);
+      if (diffMs < 60_000) return "just now";
+      if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
+      if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
+      if (diffMs < 604_800_000) return `${Math.floor(diffMs / 86_400_000)}d ago`;
+      return chatTime.format("DD/MM/YY");
+    };
+
     const data = [...orderedChatRows, ...followedWithoutChat].map((item) => {
-      let formattedTime = "";
-      if (item.lastChatMessageTime) {
-        const chatTime = dayjs(item.lastChatMessageTime);
-        const dayDiff = now.startOf("day").diff(chatTime.startOf("day"), "day");
-        if (dayDiff <= 0) {
-          formattedTime = chatTime.format("h:mm A");
-        } else if (dayDiff == 1) {
-          formattedTime = "Yesterday";
-        } else if (dayDiff < 7) {
-          formattedTime = chatTime.format("ddd");
-        } else {
-          formattedTime = chatTime.format("DD/MM/YY");
-        }
-      }
+      const relativeTime = formatRelative(item.lastChatMessageTime);
       return {
-      _id: item._id,
-      userId: item.userId,
-      userName: item.userName || "",
-      image: item.image || "",
-      message: item.message || "",
-      messageType: item.messageType || 1,
-      unreadCount: item.unreadCount || 0,
-      time: formattedTime,
+        _id: item._id,
+        userId: item.userId,
+        userName: item.userName || "",
+        name: item.name || "",
+        image: item.image || "",
+        isOnline: item.isOnline === true,
+        message: item.message || "",
+        messageType: item.messageType || 1,
+        lastMessageSenderUserId: item.lastMessageSenderUserId || null,
+        lastMessageImage: item.lastMessageImage || "",
+        lastMessageVideo: item.lastMessageVideo || "",
+        lastMessageThumbnail: item.lastMessageThumbnail || "",
+        unreadCount: item.unreadCount || 0,
+        time: relativeTime,
       };
     });
 
@@ -918,5 +929,38 @@ exports.getInboxList = async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};
+
+/** Delete conversation history and remove thread from inbox for the requesting user. */
+exports.deleteChatThread = async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    const peerUserId = req.query.peerUserId;
+    if (!userId || !peerUserId) {
+      return res.status(200).json({ status: false, message: "userId and peerUserId are required." });
+    }
+    const uid = new mongoose.Types.ObjectId(userId);
+    const pid = new mongoose.Types.ObjectId(peerUserId);
+
+    const topic = await ChatTopic.findOne({
+      $or: [
+        { senderUserId: uid, receiverUserId: pid },
+        { senderUserId: pid, receiverUserId: uid },
+      ],
+    });
+
+    if (!topic) {
+      return res.status(200).json({ status: true, message: "No conversation found." });
+    }
+
+    await Chat.deleteMany({ chatTopicId: topic._id });
+    topic.chatId = null;
+    await topic.save();
+
+    return res.status(200).json({ status: true, message: "Conversation deleted." });
+  } catch (error) {
+    console.log(error);
+    return res.status(200).json({ status: false, message: error.message || "Internal Server Error" });
   }
 };

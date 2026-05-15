@@ -4,6 +4,51 @@ const User = require("../../models/user.model");
 const FollowerFollowing = require("../../models/followerFollowing.model");
 const ChatTopic = require("../../models/chatTopic.model");
 
+/** User ids who should refresh notes when this author posts/deletes a note. */
+const collectNoteFeedPeerIds = async (authorUserId) => {
+  const uid = new mongoose.Types.ObjectId(authorUserId);
+  const me = String(uid);
+
+  const [following, followers, chatTopics] = await Promise.all([
+    FollowerFollowing.find({ fromUserId: uid }).select("toUserId").lean(),
+    FollowerFollowing.find({ toUserId: uid }).select("fromUserId").lean(),
+    ChatTopic.find({
+      isAccepted: true,
+      chatId: { $ne: null },
+      $or: [{ senderUserId: uid }, { receiverUserId: uid }],
+    })
+      .select("senderUserId receiverUserId")
+      .lean(),
+  ]);
+
+  const ids = new Set([me]);
+  following.forEach((f) => f.toUserId && ids.add(String(f.toUserId)));
+  followers.forEach((f) => f.fromUserId && ids.add(String(f.fromUserId)));
+  for (const t of chatTopics) {
+    const s = t.senderUserId != null ? String(t.senderUserId) : "";
+    const r = t.receiverUserId != null ? String(t.receiverUserId) : "";
+    if (s && s !== me) ids.add(s);
+    if (r && r !== me) ids.add(r);
+  }
+  return Array.from(ids);
+};
+
+const emitNoteFeedUpdated = async (authorUserId) => {
+  const io = global.io;
+  if (!io || !authorUserId) return;
+  const authorId = authorUserId.toString();
+  const payload = { userId: authorId };
+  try {
+    const viewerIds = await collectNoteFeedPeerIds(authorUserId);
+    for (const viewerId of viewerIds) {
+      io.in(`globalRoom:${viewerId}`).emit("noteFeedUpdated", payload);
+    }
+  } catch (err) {
+    console.log("emitNoteFeedUpdated", err);
+    io.in(`globalRoom:${authorId}`).emit("noteFeedUpdated", payload);
+  }
+};
+
 exports.setNote = async (req, res) => {
   try {
     const userId = req.query.userId;
@@ -31,11 +76,28 @@ exports.setNote = async (req, res) => {
       .populate("userId", "name userName image isOnline")
       .lean();
 
+    await emitNoteFeedUpdated(userId);
+
     return res.status(200).json({
       status: true,
       message: "Success",
       data: populated,
     });
+  } catch (err) {
+    console.log(err);
+    return res.status(200).json({ status: false, message: err.message });
+  }
+};
+
+exports.deleteNote = async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) {
+      return res.status(200).json({ status: false, message: "userId is required." });
+    }
+    await Note.deleteMany({ userId });
+    await emitNoteFeedUpdated(userId);
+    return res.status(200).json({ status: true, message: "Note deleted." });
   } catch (err) {
     console.log(err);
     return res.status(200).json({ status: false, message: err.message });
@@ -57,34 +119,7 @@ exports.getNotesFeed = async (req, res) => {
     }
 
     const uid = new mongoose.Types.ObjectId(userId);
-
-    // People I follow (fromUserId = me)
-    const following = await FollowerFollowing.find({ fromUserId: uid }).select("toUserId").lean();
-    // People who follow me (toUserId = me) — symmetric visibility vs “following only”
-    const followers = await FollowerFollowing.find({ toUserId: uid }).select("fromUserId").lean();
-
-    // Anyone I’ve exchanged messages with (accepted chat topic) — fixes “note only on one side” for DMs
-    const chatTopics = await ChatTopic.find({
-      isAccepted: true,
-      chatId: { $ne: null },
-      $or: [{ senderUserId: uid }, { receiverUserId: uid }],
-    })
-      .select("senderUserId receiverUserId")
-      .lean();
-
-    const me = String(uid);
-    const candidateIdSet = new Set();
-    candidateIdSet.add(me);
-    following.forEach((f) => f.toUserId && candidateIdSet.add(String(f.toUserId)));
-    followers.forEach((f) => f.fromUserId && candidateIdSet.add(String(f.fromUserId)));
-    for (const t of chatTopics) {
-      const s = t.senderUserId != null ? String(t.senderUserId) : "";
-      const r = t.receiverUserId != null ? String(t.receiverUserId) : "";
-      if (s && s !== me) candidateIdSet.add(s);
-      if (r && r !== me) candidateIdSet.add(r);
-    }
-
-    const candidateIds = Array.from(candidateIdSet).map((s) => new mongoose.Types.ObjectId(s));
+    const candidateIds = (await collectNoteFeedPeerIds(userId)).map((s) => new mongoose.Types.ObjectId(s));
     const now = new Date();
 
     const raw = await Note.find({

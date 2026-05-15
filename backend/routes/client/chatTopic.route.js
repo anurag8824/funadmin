@@ -19,4 +19,6 @@ route.post("/chatWithUserSearch", checkAccessWithSecretKey(), ChatTopicControlle
 //get recent chat with user
 route.get("/recentChatWithUsers", checkAccessWithSecretKey(), ChatTopicController.recentChatWithUsers);
 
+route.delete("/deleteChatThread", checkAccessWithSecretKey(), ChatTopicController.deleteChatThread);
+
 module.exports = route;
