@@ -44,6 +44,12 @@ const videoSchema = new mongoose.Schema(
     },
 
     savedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", default: [] }],
+
+    // Editor overlay metadata (text, stickers, drawing data for server-side rendering)
+    overlayData: { type: mongoose.Schema.Types.Mixed, default: null },
+
+    // Whether this video is a draft (not yet published)
+    isDraft: { type: Boolean, default: false },
   },
   {
     timestamps: true,

@@ -46,6 +46,8 @@ const { generateHistoryUniqueId } = require("../../util/generateHistoryUniqueId"
 //private key
 const admin = require("../../util/privateKey");
 
+const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
+
 //user function
 const userFunction = async (user, data_) => {
   const data = data_.body;
@@ -63,6 +65,7 @@ const userFunction = async (user, data_) => {
   }
 
   user.email = data?.email ? data?.email?.trim() : user.email;
+  user.emailNormalized = data?.email ? normalizeEmail(data.email) : user.emailNormalized;
   user.mobileNumber = data.mobileNumber ? data.mobileNumber : user.mobileNumber;
 
   user.countryFlagImage = data.countryFlagImage ? data.countryFlagImage : user.countryFlagImage;
@@ -78,78 +81,39 @@ const userFunction = async (user, data_) => {
   return user;
 };
 
-//check the user is exists or not with loginType 3 quick(identity)
-exports.checkUser = async (req, res) => {
-  try {
-    if (!req.query.identity) {
-      return res.status(200).json({ status: false, message: "identity must be requried." });
-    }
-
-    const user = await User.findOne({ identity: req.query.identity, loginType: 3 });
-    if (user) {
-      return res.status(200).json({
-        status: true,
-        message: "User login Successfully.",
-        isLogin: true,
-      });
-    } else {
-      return res.status(200).json({
-        status: true,
-        message: "User must have to sign up.",
-        isLogin: false,
-      });
-    }
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({
-      status: false,
-      message: error.message || "Internal Sever Error",
-    });
-  }
+// checkUser endpoint kept for backward compatibility (quick login is disabled).
+exports.checkUser = async (_req, res) => {
+  return res.status(200).json({
+    status: false,
+    message: "Quick login has been disabled. Please use Google or Facebook sign in.",
+    isLogin: false,
+  });
 };
 
 //user login and sign up (fcmToken required for push notifications)
 exports.loginOrSignUp = async (req, res) => {
   try {
-    if (req.body.loginType === undefined || !req.body.fcmToken) {
+    if (req.body.loginType === undefined || !req.body.fcmToken || !req.body.deviceId) {
       return res.status(200).json({ status: false, message: "Oops ! Invalid details!" });
     }
-
-    let userQuery;
-
     const loginType = req?.body?.loginType;
-    const identity = req?.body?.identity;
-
-    if (loginType === 1) {
-      if (!req.body.mobileNumber) {
-        return res.status(200).json({ status: false, message: "mobileNumber must be required." });
-      }
-
-      userQuery = await User.findOne({ mobileNumber: req.body.mobileNumber?.trim() });
-    } else if (loginType === 2) {
-      if (!req.body.email) {
-        return res.status(200).json({ status: false, message: "email must be required." });
-      }
-
-      userQuery = await User.findOne({ email: req?.body?.email?.trim(), loginType: 2 });
-    } else if (loginType === 3) {
-      if (!req.body.identity) {
-        return res.status(200).json({ status: false, message: "identity must be required." });
-      }
-
-      // Must match checkUser: identity + loginType 3. Do not require body.email (signup/login only send identity).
-      userQuery = await User.findOne({ identity: identity, loginType: 3 });
-    } else if (loginType === 4) {
-      if (!req.body.email) {
-        return res.status(200).json({ status: false, message: "email must be required." });
-      }
-
-      userQuery = await User.findOne({ email: req?.body?.email?.trim(), loginType: 4 });
-    } else {
-      return res.status(200).json({ status: false, message: "loginType must be passed valid." });
+    if (![2, 4].includes(loginType)) {
+      return res.status(200).json({ status: false, message: "Only Google and Facebook login are allowed." });
     }
 
-    const user = userQuery;
+    const emailNormalized = normalizeEmail(req?.body?.email);
+    if (!emailNormalized) {
+      return res.status(200).json({ status: false, message: "email must be required." });
+    }
+    const deviceId = String(req.body.deviceId || "").trim();
+    const identity = String(req?.body?.identity || "").trim();
+    if (!deviceId || !identity) {
+      return res.status(200).json({ status: false, message: "deviceId and identity are required." });
+    }
+
+    const user = await User.findOne({
+      $or: [{ emailNormalized }, { email: req?.body?.email?.trim() }],
+    });
 
     if (user) {
       console.log("User is already exist ............");
@@ -162,6 +126,18 @@ exports.loginOrSignUp = async (req, res) => {
       user.name = req.body.name ? req.body.name.trim() : user.name;
       user.userName = req.body.userName ? req.body.userName.trim() : user.userName;
       user.fcmToken = req.body.fcmToken ? req.body.fcmToken.trim() : user.fcmToken;
+      user.identity = identity;
+      user.email = req?.body?.email?.trim();
+      user.emailNormalized = emailNormalized;
+      user.loginType = loginType;
+      if (user.activeDeviceId && user.activeDeviceId !== deviceId) {
+        return res.status(200).json({
+          status: false,
+          message: "This account is already active on another device. Please logout there first.",
+        });
+      }
+      user.activeDeviceId = deviceId;
+      user.activeSessionAt = new Date();
       user.lastlogin = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
 
       const user_ = await userFunction(user, req);
@@ -183,6 +159,12 @@ exports.loginOrSignUp = async (req, res) => {
       const newUser = new User();
       newUser.date = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
       newUser.coin = bonusCoins;
+      newUser.email = req?.body?.email?.trim();
+      newUser.emailNormalized = emailNormalized;
+      newUser.identity = identity;
+      newUser.loginType = loginType;
+      newUser.activeDeviceId = deviceId;
+      newUser.activeSessionAt = new Date();
 
       const user = await userFunction(newUser, req);
       const authToken = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -330,6 +312,56 @@ exports.loginOrSignUp = async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message || "Internal Sever Error" });
+  }
+};
+
+exports.logout = async (req, res) => {
+  try {
+    const { userId, deviceId } = req.query;
+    if (!userId || !deviceId) {
+      return res.status(200).json({ status: false, message: "userId and deviceId are required." });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({ status: true, message: "Already logged out." });
+    }
+    if (!user.activeDeviceId || user.activeDeviceId === deviceId) {
+      user.activeDeviceId = "";
+      user.activeSessionAt = null;
+      await user.save();
+    }
+    return res.status(200).json({ status: true, message: "Logout successful." });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};
+
+exports.validateSession = async (req, res) => {
+  try {
+    const { userId, deviceId, email } = req.query;
+    if (!userId || !deviceId) {
+      return res.status(200).json({ status: false, message: "userId and deviceId are required." });
+    }
+    const user = await User.findById(userId).select("_id isBlock activeDeviceId emailNormalized").lean();
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
+    }
+    const normalized = normalizeEmail(email);
+    const sameEmail = !normalized || user.emailNormalized === normalized;
+    const sameDevice = !user.activeDeviceId || user.activeDeviceId === deviceId;
+    return res.status(200).json({
+      status: true,
+      message: "Session validation complete.",
+      isValid: sameEmail && sameDevice,
+      mustLogout: !(sameEmail && sameDevice),
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
   }
 };
 

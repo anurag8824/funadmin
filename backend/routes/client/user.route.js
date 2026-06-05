@@ -13,6 +13,8 @@ route.post("/checkUser", checkAccessWithSecretKey(), UserController.checkUser);
 
 //user login or sign up
 route.post("/loginOrSignUp", checkAccessWithSecretKey(), UserController.loginOrSignUp);
+route.post("/logout", checkAccessWithSecretKey(), clientAuthMiddleware, UserController.logout);
+route.get("/validateSession", checkAccessWithSecretKey(), clientAuthMiddleware, UserController.validateSession);
 
 //update profile of the user
 route.patch("/update", checkAccessWithSecretKey(), UserController.update);

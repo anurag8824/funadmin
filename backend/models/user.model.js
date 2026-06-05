@@ -25,11 +25,14 @@ const userSchema = new mongoose.Schema(
     totalWithdrawalAmount: { type: Number, default: 0 },
 
     uniqueId: { type: String, unique: true, default: "" },
-    email: { type: String, default: "ShortieUser123@gmail.com" },
+    email: { type: String, default: "" },
+    emailNormalized: { type: String, default: null },
     mobileNumber: { type: String, default: "" },
     loginType: { type: Number, enum: LOGIN_TYPE }, //1.mobileNumber 2.google 3.quick(identity) 4.apple
     identity: { type: String, default: "" },
     fcmToken: { type: String, default: null },
+    activeDeviceId: { type: String, default: "" },
+    activeSessionAt: { type: Date, default: null },
 
     isLive: { type: Boolean, default: false },
     liveHistoryId: { type: mongoose.Schema.Types.ObjectId, ref: "LiveHistory", default: null },
@@ -52,5 +55,6 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ isBlock: 1 });
 userSchema.index({ isFake: 1 });
 userSchema.index({ createdAt: -1 });
+userSchema.index({ emailNormalized: 1 }, { unique: true, sparse: true, partialFilterExpression: { emailNormalized: { $type: "string" } } });
 
 module.exports = mongoose.model("User", userSchema);
