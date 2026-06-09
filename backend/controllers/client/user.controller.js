@@ -93,7 +93,7 @@ exports.checkUser = async (_req, res) => {
 //user login and sign up (fcmToken required for push notifications)
 exports.loginOrSignUp = async (req, res) => {
   try {
-    if (req.body.loginType === undefined || !req.body.fcmToken || !req.body.deviceId) {
+    if (req.body.loginType === undefined || !req.body.fcmToken) {
       return res.status(200).json({ status: false, message: "Oops ! Invalid details!" });
     }
     const loginType = req?.body?.loginType;
@@ -105,10 +105,9 @@ exports.loginOrSignUp = async (req, res) => {
     if (!emailNormalized) {
       return res.status(200).json({ status: false, message: "email must be required." });
     }
-    const deviceId = String(req.body.deviceId || "").trim();
     const identity = String(req?.body?.identity || "").trim();
-    if (!deviceId || !identity) {
-      return res.status(200).json({ status: false, message: "deviceId and identity are required." });
+    if (!identity) {
+      return res.status(200).json({ status: false, message: "identity is required." });
     }
 
     const user = await User.findOne({
@@ -130,14 +129,6 @@ exports.loginOrSignUp = async (req, res) => {
       user.email = req?.body?.email?.trim();
       user.emailNormalized = emailNormalized;
       user.loginType = loginType;
-      if (user.activeDeviceId && user.activeDeviceId !== deviceId) {
-        return res.status(200).json({
-          status: false,
-          message: "This account is already active on another device. Please logout there first.",
-        });
-      }
-      user.activeDeviceId = deviceId;
-      user.activeSessionAt = new Date();
       user.lastlogin = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
 
       const user_ = await userFunction(user, req);
@@ -163,8 +154,6 @@ exports.loginOrSignUp = async (req, res) => {
       newUser.emailNormalized = emailNormalized;
       newUser.identity = identity;
       newUser.loginType = loginType;
-      newUser.activeDeviceId = deviceId;
-      newUser.activeSessionAt = new Date();
 
       const user = await userFunction(newUser, req);
       const authToken = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -317,18 +306,9 @@ exports.loginOrSignUp = async (req, res) => {
 
 exports.logout = async (req, res) => {
   try {
-    const { userId, deviceId } = req.query;
-    if (!userId || !deviceId) {
-      return res.status(200).json({ status: false, message: "userId and deviceId are required." });
-    }
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(200).json({ status: true, message: "Already logged out." });
-    }
-    if (!user.activeDeviceId || user.activeDeviceId === deviceId) {
-      user.activeDeviceId = "";
-      user.activeSessionAt = null;
-      await user.save();
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(200).json({ status: false, message: "userId is required." });
     }
     return res.status(200).json({ status: true, message: "Logout successful." });
   } catch (error) {
@@ -339,11 +319,11 @@ exports.logout = async (req, res) => {
 
 exports.validateSession = async (req, res) => {
   try {
-    const { userId, deviceId, email } = req.query;
-    if (!userId || !deviceId) {
-      return res.status(200).json({ status: false, message: "userId and deviceId are required." });
+    const { userId, email } = req.query;
+    if (!userId) {
+      return res.status(200).json({ status: false, message: "userId is required." });
     }
-    const user = await User.findById(userId).select("_id isBlock activeDeviceId emailNormalized").lean();
+    const user = await User.findById(userId).select("_id isBlock emailNormalized").lean();
     if (!user) {
       return res.status(200).json({ status: false, message: "User does not found." });
     }
@@ -352,12 +332,11 @@ exports.validateSession = async (req, res) => {
     }
     const normalized = normalizeEmail(email);
     const sameEmail = !normalized || user.emailNormalized === normalized;
-    const sameDevice = !user.activeDeviceId || user.activeDeviceId === deviceId;
     return res.status(200).json({
       status: true,
       message: "Session validation complete.",
-      isValid: sameEmail && sameDevice,
-      mustLogout: !(sameEmail && sameDevice),
+      isValid: sameEmail,
+      mustLogout: !sameEmail,
     });
   } catch (error) {
     console.log(error);
