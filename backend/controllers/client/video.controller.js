@@ -1525,8 +1525,20 @@ exports.getReelsFeedLite = async (req, res) => {
     ]);
 
     const hasMore = videos.length > limit;
-    const items = hasMore ? videos.slice(0, limit) : videos;
-    const lastItem = items.length > 0 ? items[items.length - 1] : null;
+    const rawItems = hasMore ? videos.slice(0, limit) : videos;
+    const items = rawItems.filter((v) => {
+      const hasPlayableUrl = Boolean(
+        v.videoUrl ||
+          v.assets?.hlsMasterUrl ||
+          v.assets?.mp4_720_url ||
+          v.assets?.mp4_480_url ||
+          v.assets?.mp4_1080_url,
+      );
+      if (hasPlayableUrl) return true;
+      const status = String(v.processingStatus || "").toLowerCase();
+      return status === "processing" || status === "uploading";
+    });
+    const lastItem = rawItems.length > 0 ? rawItems[rawItems.length - 1] : null;
 
     const responsePayload = {
       status: true,
