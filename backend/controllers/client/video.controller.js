@@ -26,6 +26,21 @@ const admin = require("../../util/privateKey");
 //deleteFromStorage
 const { deleteFromStorage } = require("../../util/storageHelper");
 
+/** Feed visibility: require transcoded assets, or an in-progress upload — not raw failed uploads. */
+function isReelVisibleInFeed(video) {
+  const hasProcessedAssets = Boolean(
+    video.assets?.hlsMasterUrl ||
+      video.assets?.mp4_720_url ||
+      video.assets?.mp4_480_url ||
+      video.assets?.mp4_1080_url,
+  );
+  if (hasProcessedAssets) return true;
+  const status = String(video.processingStatus || "").toLowerCase();
+  if (status === "processing" || status === "uploading") return true;
+  if (status === "failed") return false;
+  return Boolean(video.videoUrl);
+}
+
 //generateUniqueVideoOrPostId
 const { generateUniqueVideoOrPostId } = require("../../util/generateUniqueVideoOrPostId");
 
@@ -1526,18 +1541,7 @@ exports.getReelsFeedLite = async (req, res) => {
 
     const hasMore = videos.length > limit;
     const rawItems = hasMore ? videos.slice(0, limit) : videos;
-    const items = rawItems.filter((v) => {
-      const hasPlayableUrl = Boolean(
-        v.videoUrl ||
-          v.assets?.hlsMasterUrl ||
-          v.assets?.mp4_720_url ||
-          v.assets?.mp4_480_url ||
-          v.assets?.mp4_1080_url,
-      );
-      if (hasPlayableUrl) return true;
-      const status = String(v.processingStatus || "").toLowerCase();
-      return status === "processing" || status === "uploading";
-    });
+    const items = rawItems.filter(isReelVisibleInFeed);
     const lastItem = rawItems.length > 0 ? rawItems[rawItems.length - 1] : null;
 
     const responsePayload = {
