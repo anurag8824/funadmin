@@ -508,6 +508,14 @@ exports.getAllPosts = async (req, res) => {
           },
         },
         {
+          $lookup: {
+            from: "postviews",
+            localField: "_id",
+            foreignField: "postId",
+            as: "views",
+          },
+        },
+        {
           $project: {
             caption: 1,
             postImage: 1,
@@ -544,6 +552,7 @@ exports.getAllPosts = async (req, res) => {
             },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
+            totalViews: { $size: "$views" },
             time: {
               $let: {
                 vars: {
@@ -817,6 +826,14 @@ exports.getAllPosts = async (req, res) => {
           },
         },
         {
+          $lookup: {
+            from: "postviews",
+            localField: "_id",
+            foreignField: "postId",
+            as: "views",
+          },
+        },
+        {
           $project: {
             caption: 1,
             postImage: 1,
@@ -853,6 +870,7 @@ exports.getAllPosts = async (req, res) => {
             },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
+            totalViews: { $size: "$views" },
             time: {
               $let: {
                 vars: {
@@ -1534,6 +1552,14 @@ exports.retrieveAllPosts = async (req, res, next) => {
           },
         },
         {
+          $lookup: {
+            from: "postviews",
+            localField: "_id",
+            foreignField: "postId",
+            as: "views",
+          },
+        },
+        {
           $project: {
             caption: 1,
             postImage: 1,
@@ -1570,6 +1596,7 @@ exports.retrieveAllPosts = async (req, res, next) => {
             },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
+            totalViews: { $size: "$views" },
             time: {
               $let: {
                 vars: {
@@ -1775,14 +1802,15 @@ exports.retrieveAllPosts = async (req, res, next) => {
           },
         },
         {
+          $lookup: {
+            from: "postviews",
+            localField: "_id",
+            foreignField: "postId",
+            as: "views",
+          },
+        },
+        {
           $project: {
-            caption: 1,
-            postImage: 1,
-            shareCount: 1,
-            isFake: 1,
-            isLike: 1,
-            isFollow: 1,
-            isSaved: 1,
             createdAt: 1,
             userId: "$user._id",
             isProfileImageBanned: "$user.isProfileImageBanned",
@@ -1793,6 +1821,7 @@ exports.retrieveAllPosts = async (req, res, next) => {
             hashTag: "$hashTag.hashTag",
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
+            totalViews: { $size: "$views" },
             time: {
               $let: {
                 vars: {

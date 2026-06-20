@@ -461,6 +461,14 @@ exports.getSearchedContent = async (req, res) => {
           },
         },
         {
+          $lookup: {
+            from: "postviews",
+            localField: "_id",
+            foreignField: "postId",
+            as: "views",
+          },
+        },
+        {
           $project: {
             caption: 1,
             postImage: 1,
@@ -478,6 +486,7 @@ exports.getSearchedContent = async (req, res) => {
             isFollow: { $gt: [{ $size: "$isFollow" }, 0] },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
+            totalViews: { $size: "$views" },
             time: {
               $let: {
                 vars: {
@@ -626,6 +635,14 @@ exports.getSearchedContent = async (req, res) => {
           },
         },
         {
+          $lookup: {
+            from: "watchhistories",
+            localField: "_id",
+            foreignField: "videoId",
+            as: "views",
+          },
+        },
+        {
           $project: {
             caption: 1,
             videoImage: 1,
@@ -648,6 +665,7 @@ exports.getSearchedContent = async (req, res) => {
             isFollow: { $gt: [{ $size: "$isFollow" }, 0] },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$totalComments" },
+            totalViews: { $size: "$views" },
             time: {
               $let: {
                 vars: {
