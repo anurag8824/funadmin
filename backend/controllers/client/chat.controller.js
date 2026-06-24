@@ -89,7 +89,11 @@ const getChatNotificationBody = (messageType, text) => {
   if (messageType === CHAT_MESSAGE_TYPES.IMAGE) return "📷 Sent a photo";
   if (messageType === CHAT_MESSAGE_TYPES.AUDIO) return "🎵 Sent an audio clip";
   if (messageType === CHAT_MESSAGE_TYPES.VIDEO) return "🎬 Sent a video";
-  return `🗨️ ${text}`;
+  const body = typeof text === "string" ? text.trim() : "";
+  if (/\/post\/[a-fA-F0-9]{24}/.test(body) || /funtap:\/\/post\//i.test(body)) return "📎 Shared a post";
+  if (/\/video\/[a-fA-F0-9]{24}/.test(body) || /funtap:\/\/(?:reel|video)\//i.test(body)) return "📎 Shared a reel";
+  if (/^https?:\/\//i.test(body)) return "🗨️ Sent a message";
+  return body ? `🗨️ ${body}` : "🗨️ Sent a message";
 };
 
 //send a message or create a message request ( image or audio )
