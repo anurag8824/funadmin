@@ -1,7 +1,7 @@
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
-const initializeSettings = require("../index");
+const { ensureSettingsLoaded } = require("./bootstrapSettings");
 
 /**
  * No-op Firebase Admin stub when credentials are missing or invalid.
@@ -41,7 +41,7 @@ function getServiceAccountCredential() {
 
 const initFirebase = async () => {
   try {
-    await initializeSettings;
+    await ensureSettingsLoaded();
     const credential = getServiceAccountCredential();
     if (!credential || !credential.private_key || !credential.client_email) {
       console.warn(

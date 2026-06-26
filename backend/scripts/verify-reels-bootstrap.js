@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
  * Run on the server after deploy: node scripts/verify-reels-bootstrap.js
+ * Does NOT start the HTTP server (safe while pm2 is running).
  */
+const fs = require("fs");
+const path = require("path");
+
 const required = [
   "services/reels/feedCacheService.js",
   "services/reels/scalingConfig.js",
@@ -17,10 +21,8 @@ const required = [
   "middleware/reelsRateLimiter.js",
   "util/signedPlaybackUrl.js",
   "util/cdnCachePolicy.js",
+  "util/bootstrapSettings.js",
 ];
-
-const fs = require("fs");
-const path = require("path");
 
 const root = path.join(__dirname, "..");
 let failed = false;
@@ -33,20 +35,21 @@ for (const rel of required) {
   }
 }
 
-try {
-  require(path.join(root, "routes/client/video.route.js"));
-  console.log("OK: video.route loads");
-} catch (err) {
-  console.error("FAIL: video.route", err.message);
-  failed = true;
-}
+const modulesToLoad = [
+  "services/reels/feedCacheService.js",
+  "services/reels/feedService.js",
+  "middleware/reelsRateLimiter.js",
+  "middleware/reelsRequestId.js",
+];
 
-try {
-  require(path.join(root, "services/reels/feedCacheService.js"));
-  console.log("OK: feedCacheService loads");
-} catch (err) {
-  console.error("FAIL: feedCacheService", err.message);
-  failed = true;
+for (const rel of modulesToLoad) {
+  try {
+    require(path.join(root, rel));
+    console.log("OK:", rel);
+  } catch (err) {
+    console.error("FAIL:", rel, err.message);
+    failed = true;
+  }
 }
 
 if (failed) {
@@ -55,3 +58,4 @@ if (failed) {
 }
 
 console.log("\nBootstrap verification passed.");
+process.exit(0);
