@@ -44,6 +44,16 @@ const { ensureSettingsLoaded, updateSettingFile } = require("./util/bootstrapSet
 global.settingJSON = global.settingJSON || {};
 global.updateSettingFile = updateSettingFile;
 
+// Load file fallback before route require chain (upload middleware reads storage config).
+try {
+  if (!global.settingJSON._id) {
+    global.settingJSON = require("./setting");
+    console.log("✅ Loaded setting.js fallback for startup");
+  }
+} catch (err) {
+  console.warn("⚠️ setting.js fallback unavailable:", err.message);
+}
+
 // Mount API routes at startup so the server never listens without handlers.
 try {
   const routes = require("./routes/route");
