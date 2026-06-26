@@ -92,6 +92,7 @@ exports.checkUser = async (_req, res) => {
 
 //user login and sign up (fcmToken required for push notifications)
 exports.loginOrSignUp = async (req, res) => {
+  const startedAt = Date.now();
   try {
     if (req.body.loginType === undefined || !req.body.fcmToken) {
       return res.status(200).json({ status: false, message: "Oops ! Invalid details!" });
@@ -112,7 +113,9 @@ exports.loginOrSignUp = async (req, res) => {
 
     const user = await User.findOne({
       $or: [{ emailNormalized }, { email: req?.body?.email?.trim() }],
-    });
+    })
+      .maxTimeMS(10_000)
+      .lean(false);
 
     if (user) {
       console.log("User is already exist ............");
@@ -299,7 +302,7 @@ exports.loginOrSignUp = async (req, res) => {
       }
     }
   } catch (error) {
-    console.log(error);
+    console.error(`[LOGIN] failed after ${Date.now() - startedAt}ms:`, error?.message || error);
     return res.status(500).json({ status: false, message: error.message || "Internal Sever Error" });
   }
 };

@@ -2,51 +2,78 @@
 const express = require("express");
 const app = express();
 
+//dotenv (load before connection + routes)
+require("dotenv").config({ path: ".env" });
+
 //cors
 const cors = require("cors");
-
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));
+
+// Always-on liveness probe — does not depend on Mongo or route bootstrap.
+app.get("/ping", (_req, res) => {
+  res.status(200).json({ ok: true, ts: Date.now() });
+});
+
+// Fail hung requests instead of leaving clients waiting until app timeout.
+app.use((req, res, next) => {
+  const timeoutMs = parseInt(process.env.API_REQUEST_TIMEOUT_MS || "12000", 10);
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`[API_TIMEOUT] ${req.method} ${req.originalUrl}`);
+      res.status(503).json({
+        status: false,
+        message: "Request timeout. Please try again.",
+        code: "API_TIMEOUT",
+      });
+    }
+  }, timeoutMs);
+  res.on("finish", () => clearTimeout(timer));
+  res.on("close", () => clearTimeout(timer));
+  next();
+});
 
 //logging middleware
 const logger = require("morgan");
 app.use(logger("dev"));
 
-//path
 const path = require("path");
-
-//dotenv
-require("dotenv").config({ path: ".env" });
-
+const mongoose = require("mongoose");
 const { ensureSettingsLoaded, updateSettingFile } = require("./util/bootstrapSettings");
 
-//Declare global variable
 global.settingJSON = global.settingJSON || {};
 global.updateSettingFile = updateSettingFile;
 
-//connection.js
+// Mount API routes at startup so the server never listens without handlers.
+try {
+  const routes = require("./routes/route");
+  app.use(routes);
+  console.log("✅ API routes mounted successfully");
+} catch (err) {
+  console.error("❌ CRITICAL: Failed to mount API routes:", err);
+  app.use((req, res) => {
+    res.status(503).json({
+      status: false,
+      message: "API temporarily unavailable (route bootstrap failed). Check server logs.",
+    });
+  });
+}
+
 const db = require("./util/connection");
 
-db.on("error", () => {
-  console.log("Connection Error: ");
+db.on("error", (err) => {
+  console.error("Mongo connection error:", err?.message || err);
 });
 
 db.once("open", async () => {
   console.log("Mongo: successfully connected to db");
-  await ensureSettingsLoaded();
-
   try {
-    const routes = require("./routes/route");
-    app.use(routes);
-    console.log("✅ API routes mounted successfully");
+    await ensureSettingsLoaded();
+    // Register socket handlers only after DB + settings are ready.
+    require("./socket");
+    console.log("✅ Socket handlers registered");
   } catch (err) {
-    console.error("❌ CRITICAL: Failed to mount API routes:", err);
-    app.use((req, res) => {
-      res.status(503).json({
-        status: false,
-        message: "API temporarily unavailable (route bootstrap failed). Check server logs.",
-      });
-    });
+    console.error("❌ Post-connect bootstrap failed:", err);
   }
 });
 
@@ -54,18 +81,13 @@ db.once("open", async () => {
 const http = require("http");
 const server = http.createServer(app);
 global.io = require("socket.io")(server, {
-  // More tolerant heartbeat for mobile/background transitions.
   pingInterval: 25000,
   pingTimeout: 60000,
   connectTimeout: 45000,
 });
 
-//socket.js
-require("./socket");
-
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-//set port and listen the request
 server.listen(process?.env.PORT, () => {
-  console.log("Hello World ! listening on " + process?.env.PORT);
+  console.log("Hello World ! listening on " + process?.env?.PORT);
 });

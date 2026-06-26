@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { getReelsQueue } = require("../../util/reelsQueue");
+const { isReelsQueueReady } = require("../../util/reelsQueue");
 const { isRedisReady } = require("./feedCacheService");
 
 async function getReelsSubsystemHealth() {
@@ -7,7 +7,7 @@ async function getReelsSubsystemHealth() {
   const mongoOk = mongoState === 1;
   const redisOk = isRedisReady();
   const queueConfigured = Boolean(process.env.REDIS_URL);
-  const queueOk = queueConfigured ? Boolean(getReelsQueue()) : true;
+  const queueOk = queueConfigured ? isReelsQueueReady() : true;
   const asyncProcessing =
     String(process.env.REELS_ASYNC_PROCESSING || "false").toLowerCase() === "true";
 

@@ -6,7 +6,7 @@ let settingsPromise = null;
 
 async function loadSettingsFromDb() {
   try {
-    const setting = await Setting.findOne().sort({ createdAt: -1 });
+    const setting = await Setting.findOne().sort({ createdAt: -1 }).maxTimeMS(10_000);
     if (setting) {
       global.settingJSON = setting.toObject();
       console.log("✅ Settings loaded:", global.settingJSON._id);
