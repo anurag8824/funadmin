@@ -4,8 +4,18 @@ const User = require("../../models/user.model");
 const { isReelVisibleInFeed, resolveBlockContext } = require("./reelsFeed.shared");
 const { getCachedFeedPage, setCachedFeedPage } = require("./feedCacheService");
 const { rankFeedItems } = require("./recommendationService");
-const scalingConfig = require("./scalingConfig");
-const { recordFeedRequest } = require("./reelsMetrics.service");
+let scalingConfig;
+try {
+  scalingConfig = require("./scalingConfig");
+} catch (_) {
+  scalingConfig = { feedPageMaxLimit: 50 };
+}
+let recordFeedRequest = () => {};
+try {
+  recordFeedRequest = require("./reelsMetrics.service").recordFeedRequest;
+} catch (_) {
+  /* metrics optional */
+}
 
 function buildFeedAggregation({ baseMatch, limit, start, requestedVideoId, cursorCreatedAt, cursorId, viewerUserId }) {
   const pipeline = [

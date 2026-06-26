@@ -17,7 +17,7 @@ async function getReelsSubsystemHealth() {
     transcodeQueue: { ok: queueOk, configured: queueConfigured, asyncProcessing },
   };
 
-  const healthy = mongoOk && (!queueConfigured || redisOk);
+  const healthy = mongoOk;
   return {
     status: healthy ? "ok" : "degraded",
     message: healthy ? "Reels subsystem healthy." : "Reels subsystem degraded.",

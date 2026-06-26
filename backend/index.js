@@ -65,8 +65,19 @@ db.once("open", async () => {
   console.log("Mongo: successfully connected to db");
   await initializeSettings();
 
-  const routes = require("./routes/route");
-  app.use(routes);
+  try {
+    const routes = require("./routes/route");
+    app.use(routes);
+    console.log("✅ API routes mounted successfully");
+  } catch (err) {
+    console.error("❌ CRITICAL: Failed to mount API routes:", err);
+    app.use((req, res) => {
+      res.status(503).json({
+        status: false,
+        message: "API temporarily unavailable (route bootstrap failed). Check server logs.",
+      });
+    });
+  }
 });
 
 //socket io

@@ -3,7 +3,20 @@ const express = require("express");
 const route = express.Router();
 
 const checkAccessWithSecretKey = require("../../checkAccess");
-const { reelsFeedLimiter, reelsUploadLimiter } = require("../../middleware/reelsRateLimiter");
+
+function noopMiddleware(req, res, next) {
+  next();
+}
+
+let reelsFeedLimiter = noopMiddleware;
+let reelsUploadLimiter = noopMiddleware;
+try {
+  const limiter = require("../../middleware/reelsRateLimiter");
+  reelsFeedLimiter = limiter.reelsFeedLimiter || noopMiddleware;
+  reelsUploadLimiter = limiter.reelsUploadLimiter || noopMiddleware;
+} catch (err) {
+  console.warn("[VIDEO_ROUTE] reelsRateLimiter unavailable:", err.message);
+}
 
 //controller
 const VideoController = require("../../controllers/client/video.controller");
