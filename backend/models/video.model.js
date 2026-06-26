@@ -64,5 +64,8 @@ videoSchema.index({ isFake: 1 });
 videoSchema.index({ isBanned: 1 });
 videoSchema.index({ createdAt: -1 });
 videoSchema.index({ isBanned: 1, isFake: 1, createdAt: -1 });
+videoSchema.index({ isBanned: 1, isDraft: 1, createdAt: -1 });
+videoSchema.index({ processingStatus: 1, createdAt: -1 });
+videoSchema.index({ userId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Video", videoSchema);

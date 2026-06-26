@@ -19,27 +19,18 @@ const Report = require("../../models/report.model");
 const Notification = require("../../models/notification.model");
 const ReelUploadJob = require("../../models/reelUploadJob.model");
 const { createAndEnqueueReelJob, getActiveReelJob } = require("../../services/reelProcessing.service");
+const { fetchReelsFeedLite } = require("../../services/reels/feedService");
+const { isReelVisibleInFeed, resolveBlockContext: resolveViewerBlockContext } = require("../../services/reels/reelsFeed.shared");
+const { createReelUpload } = require("../../services/reels/videoUpload.service");
+const { getUploadJobStatus, retryProcessing } = require("../../services/reels/videoProcessing.service");
+const { getReelPlayback } = require("../../services/reels/videoService");
+const { fetchTrendingFallbackFeed } = require("../../services/reels/trendingFeedService");
 
 //private key
 const admin = require("../../util/privateKey");
 
 //deleteFromStorage
 const { deleteFromStorage } = require("../../util/storageHelper");
-
-/** Feed visibility: require transcoded assets, or an in-progress upload — not raw failed uploads. */
-function isReelVisibleInFeed(video) {
-  const hasProcessedAssets = Boolean(
-    video.assets?.hlsMasterUrl ||
-      video.assets?.mp4_720_url ||
-      video.assets?.mp4_480_url ||
-      video.assets?.mp4_1080_url,
-  );
-  if (hasProcessedAssets) return true;
-  const status = String(video.processingStatus || "").toLowerCase();
-  if (status === "processing" || status === "uploading") return true;
-  if (status === "failed") return false;
-  return Boolean(video.videoUrl);
-}
 
 //generateUniqueVideoOrPostId
 const { generateUniqueVideoOrPostId } = require("../../util/generateUniqueVideoOrPostId");
@@ -49,17 +40,7 @@ const hasUserBlocked = (userDoc, targetId) =>
   (userDoc?.blockedUsers || []).some((id) => String(id) === String(targetId));
 
 async function resolveBlockContext(viewerId) {
-  const viewer = await User.findById(viewerId).select("_id isBlock blockedUsers").lean();
-  if (!viewer) return { viewer: null, excludedUserIds: [] };
-
-  const blockedByViewer = (viewer.blockedUsers || []).map((id) => String(id));
-  const blockedViewerByUsers = await User.find({ blockedUsers: toObjectId(viewerId) }).select("_id").lean();
-  const blockedViewerByIds = blockedViewerByUsers.map((u) => String(u._id));
-
-  return {
-    viewer,
-    excludedUserIds: [...new Set([...blockedByViewer, ...blockedViewerByIds])].map((id) => toObjectId(id)),
-  };
+  return resolveViewerBlockContext(User, viewerId);
 }
 
 //upload video by particular user
@@ -72,184 +53,22 @@ exports.uploadvideo = async (req, res, next) => {
       videoTime: req?.body?.videoTime,
       hasCaption: !!req?.body?.caption,
     });
-    if (!req.query.userId) {
-      if (req?.body?.videoImage) {
-        await deleteFromStorage(req?.body?.videoImage);
-      }
 
-      if (req?.body?.videoUrl) {
-        await deleteFromStorage(req?.body?.videoUrl);
-      }
-
-      return res.status(200).json({ status: false, message: "userId must be requried." });
-    }
-
-    if (!req.body.videoTime || !req?.body?.videoUrl || !req?.body?.videoImage) {
-      if (req?.body?.videoImage) {
-        await deleteFromStorage(req?.body?.videoImage);
-      }
-
-      if (req?.body?.videoUrl) {
-        await deleteFromStorage(req?.body?.videoUrl);
-      }
-
-      return res.status(200).json({ status: false, message: "Oops ! Invalid details." });
-    }
-
-    const [uniqueVideoId, user, song] = await Promise.all([generateUniqueVideoOrPostId(), User.findOne({ _id: req.query.userId, isFake: false }), Song.findById(req?.body?.songId)]);
-
-    if (!user) {
-      if (req?.body?.videoImage) {
-        await deleteFromStorage(req?.body?.videoImage);
-      }
-
-      if (req?.body?.videoUrl) {
-        await deleteFromStorage(req?.body?.videoUrl);
-      }
-
-      return res.status(200).json({ status: false, message: "User does not found." });
-    }
-
-    if (user.isBlock) {
-      if (req?.body?.videoImage) {
-        await deleteFromStorage(req?.body?.videoImage);
-      }
-
-      if (req?.body?.videoUrl) {
-        await deleteFromStorage(req?.body?.videoUrl);
-      }
-
-      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
-    }
-
-    if (!settingJSON) {
-      if (req?.body?.videoImage) {
-        await deleteFromStorage(req?.body?.videoImage);
-      }
-
-      if (req?.body?.videoUrl) {
-        await deleteFromStorage(req?.body?.videoUrl);
-      }
-
-      return res.status(200).json({ status: false, message: "setting does not found!" });
-    }
-
-    const maxDuration = settingJSON.durationOfShorts ? Math.min(settingJSON.durationOfShorts, 90) : 90;
-    if (parseInt(req.body.videoTime) > maxDuration) {
-      if (req?.body?.videoImage) {
-        await deleteFromStorage(req?.body?.videoImage);
-      }
-
-      if (req?.body?.videoUrl) {
-        await deleteFromStorage(req?.body?.videoUrl);
-      }
-
-      return res.status(400).json({ status: false, message: `Video duration cannot exceed ${maxDuration} seconds.`, code: "DURATION_EXCEEDED" });
-    }
-
-    if (req.body.videoUrl && !req.body.videoUrl.match(/\.(mp4)(\?.*)?$/i)) {
-      if (req?.body?.videoImage) await deleteFromStorage(req?.body?.videoImage);
-      if (req?.body?.videoUrl) await deleteFromStorage(req?.body?.videoUrl);
-
-      return res.status(400).json({
-        status: false,
-        message: "Only MP4 video format is supported.",
-        code: "INVALID_FILE_TYPE"
-      });
-    }
-
-    if (req?.body?.songId) {
-      if (!song) {
-        if (req?.body?.videoImage) {
-          await deleteFromStorage(req?.body?.videoImage);
-        }
-
-        if (req?.body?.videoUrl) {
-          await deleteFromStorage(req?.body?.videoUrl);
-        }
-
-        return res.status(200).json({ status: false, message: "Song does not found." });
-      }
-    }
-
-    const video = new Video();
-
-    video.userId = user._id;
-    video.caption = req?.body?.caption ? req.body.caption : "";
-    video.videoTime = req?.body?.videoTime;
-    video.songId = req?.body?.songId ? song._id : video.songId;
-
-    if (req?.body?.hashTagId) {
-      const multipleHashTag = req?.body?.hashTagId.toString().split(",");
-      video.hashTagId = req?.body?.hashTagId ? multipleHashTag : [];
-
-      //create history for each hashtag used
-      await multipleHashTag.map(async (hashTagId) => {
-        const hashTag = await HashTag.findById(hashTagId);
-        if (hashTag) {
-          const hashTagUsageHistory = new HashTagUsageHistory({
-            userId: user._id,
-            hashTagId: hashTagId,
-            videoId: video._id,
-          });
-          await hashTagUsageHistory.save();
-        }
-      });
-    }
-
-    if (req?.body?.videoImage) {
-      video.videoImage = req.body.videoImage;
-    }
-
-    if (req?.body?.videoUrl) {
-      video.videoUrl = req.body.videoUrl;
-    }
-
-    video.uniqueVideoId = uniqueVideoId;
-    video.processingStatus = "ready";
-    await video.save();
-
-    let uploadJob = null;
-    const shouldProcessAsync = String(process.env.REELS_ASYNC_PROCESSING || "false").toLowerCase() === "true";
-    if (shouldProcessAsync) {
-      const existingJob = await getActiveReelJob(video._id);
-      if (existingJob) {
-        uploadJob = existingJob;
-      } else {
-        video.processingStatus = "processing";
-        await video.save();
-        uploadJob = await createAndEnqueueReelJob({
-          videoId: video._id,
-          userId: user._id,
-          sourceUrl: video.videoUrl,
-        });
-      }
-      if (uploadJob?.state === "failed") {
-        video.processingStatus = "failed";
-        video.processingError = uploadJob.error || "Queue job creation failed";
-        await video.save();
-      }
-    }
-
-    res.status(200).json({
-      status: true,
-      message: "Video has been uploaded by the user.",
-      data: video,
-      uploadJob: uploadJob
-        ? {
-            id: uploadJob._id,
-            state: uploadJob.state,
-            progress: uploadJob.progress,
-          }
-        : null,
+    const result = await createReelUpload({
+      userId: req.query.userId,
+      body: req.body,
+      settingJSON,
     });
-    console.log("[REELS_UPLOAD][OK]", {
-      videoId: String(video._id),
-      userId: String(user._id),
-      processingStatus: video.processingStatus,
-      uploadJobId: uploadJob?._id ? String(uploadJob._id) : null,
-      uploadJobState: uploadJob?.state || null,
-    });
+
+    if (!result.ok) {
+      for (const url of result.cleanup || []) {
+        await deleteFromStorage(url);
+      }
+      return res.status(result.status).json(result.body);
+    }
+
+    res.status(200).json(result.body);
+    console.log("[REELS_UPLOAD][OK]", result.meta);
 
     const videoUrl = req?.body?.videoUrl;
 
@@ -558,30 +377,11 @@ exports.uploadvideo = async (req, res, next) => {
 //update video by particular user
 exports.getReelUploadJobStatus = async (req, res) => {
   try {
-    const { videoId, uploadJobId } = req.query;
-    if (!videoId && !uploadJobId) {
-      return res.status(400).json({ status: false, message: "videoId or uploadJobId is required." });
-    }
-
-    const filter = uploadJobId ? { _id: uploadJobId } : { videoId };
-    const uploadJob = await ReelUploadJob.findOne(filter).sort({ createdAt: -1 }).lean();
-    if (!uploadJob) {
-      return res.status(200).json({ status: true, message: "No upload job found.", data: null });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Upload job status fetched successfully.",
-      data: {
-        id: uploadJob._id,
-        videoId: uploadJob.videoId,
-        state: uploadJob.state,
-        progress: uploadJob.progress,
-        error: uploadJob.error,
-        startedAt: uploadJob.startedAt,
-        completedAt: uploadJob.completedAt,
-      },
+    const result = await getUploadJobStatus({
+      videoId: req.query.videoId,
+      uploadJobId: req.query.uploadJobId,
     });
+    return res.status(result.status).json(result.body);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ status: false, message: error.message || "Internal server error" });
@@ -590,83 +390,24 @@ exports.getReelUploadJobStatus = async (req, res) => {
 
 exports.retryReelProcessing = async (req, res) => {
   try {
-    const { userId, videoId } = req.query;
-    if (!userId || !videoId) {
-      return res.status(400).json({ status: false, message: "userId and videoId are required." });
-    }
-    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(videoId)) {
-      return res.status(400).json({ status: false, message: "Invalid userId or videoId." });
-    }
-
-    const userObjectId = new mongoose.Types.ObjectId(userId);
-    const videoObjectId = new mongoose.Types.ObjectId(videoId);
-    const video = await Video.findById(videoObjectId).select("_id userId videoUrl processingStatus").lean();
-    if (!video) {
-      return res.status(404).json({ status: false, message: "Video not found." });
-    }
-    if (String(video.userId) !== String(userObjectId)) {
-      return res.status(403).json({ status: false, message: "You can retry only your own reel processing." });
-    }
-    if (!video.videoUrl) {
-      return res.status(400).json({ status: false, message: "Source video URL is missing." });
-    }
-
-    const existingJob = await getActiveReelJob(videoObjectId);
-    if (existingJob) {
-      return res.status(200).json({
-        status: true,
-        message: "Reel processing already in progress.",
-        data: {
-          videoId: videoObjectId,
-          uploadJobId: existingJob._id,
-          state: existingJob.state,
-          progress: existingJob.progress,
-        },
-      });
-    }
-
-    await Video.updateOne(
-      { _id: videoObjectId },
-      {
-        $set: {
-          processingStatus: "processing",
-          processingError: "",
-        },
-      }
-    );
-
-    const uploadJob = await createAndEnqueueReelJob({
-      videoId: videoObjectId,
-      userId: userObjectId,
-      sourceUrl: video.videoUrl,
+    const result = await retryProcessing({
+      userId: req.query.userId,
+      videoId: req.query.videoId,
     });
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal server error" });
+  }
+};
 
-    if (uploadJob?.state === "failed") {
-      await Video.updateOne(
-        { _id: videoObjectId },
-        {
-          $set: {
-            processingStatus: "failed",
-            processingError: uploadJob.error || "Queue job creation failed",
-          },
-        }
-      );
-      return res.status(500).json({
-        status: false,
-        message: uploadJob.error || "Failed to enqueue reel processing job.",
-      });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Reel processing retried successfully.",
-      data: {
-        videoId: videoObjectId,
-        uploadJobId: uploadJob._id,
-        state: uploadJob.state,
-        progress: uploadJob.progress,
-      },
+exports.getReelPlayback = async (req, res) => {
+  try {
+    const result = await getReelPlayback({
+      userId: req.query.userId,
+      videoId: req.query.videoId,
     });
+    return res.status(result.status).json(result.body);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ status: false, message: error.message || "Internal server error" });
@@ -1376,190 +1117,64 @@ exports.getReelsFeedLite = async (req, res) => {
       cursorId: req.query.cursorId || null,
       videoId: req.query.videoId || null,
     });
-    if (!req.query.userId) {
-      return res.status(200).json({ status: false, message: "userId must be requried." });
-    }
 
-    if (!settingJSON) {
-      return res.status(200).json({ status: false, message: "Setting does not found." });
-    }
-
-    const userId = new mongoose.Types.ObjectId(req.query.userId);
-    const limit = Math.min(Math.max(parseInt(req.query.limit || "20", 10), 1), 50);
-    const start = Math.max(parseInt(req.query.start || "1", 10), 1);
-    const cursorCreatedAt = req.query.cursorCreatedAt ? new Date(req.query.cursorCreatedAt) : null;
-    const cursorId = req.query.cursorId && mongoose.Types.ObjectId.isValid(req.query.cursorId)
-      ? new mongoose.Types.ObjectId(req.query.cursorId)
-      : null;
-    const requestedVideoId = req.query.videoId && mongoose.Types.ObjectId.isValid(req.query.videoId)
-      ? new mongoose.Types.ObjectId(req.query.videoId)
-      : null;
-
-    const { viewer: user, excludedUserIds } = await resolveBlockContext(userId);
-    if (!user) {
-      return res.status(200).json({ status: false, message: "User does not found." });
-    }
-    if (user.isBlock) {
-      return res.status(200).json({ status: false, message: "you are blocked by the admin." });
-    }
-
-    const baseMatch = {
-      isBanned: false,
-      ...(settingJSON.isFakeData ? {} : { isFake: false }),
-      ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
-    };
-
-    if (req.query.videoId && !requestedVideoId) {
-      return res.status(400).json({ status: false, message: "Invalid videoId format." });
-    }
-    if (requestedVideoId) {
-      baseMatch._id = requestedVideoId;
-    }
-
-    // Cursor pagination: (createdAt desc, _id desc)
-    if (!requestedVideoId && cursorCreatedAt && cursorId) {
-      baseMatch.$or = [
-        { createdAt: { $lt: cursorCreatedAt } },
-        { createdAt: cursorCreatedAt, _id: { $lt: cursorId } },
-      ];
-    }
-
-    const videos = await Video.aggregate([
-      { $match: baseMatch },
-      { $sort: { createdAt: -1, _id: -1 } },
-      ...(!requestedVideoId && !(cursorCreatedAt && cursorId) ? [{ $skip: (start - 1) * limit }] : []),
-      { $limit: limit + 1 }, // fetch one extra to determine hasMore
-      {
-        $lookup: {
-          from: "users",
-          localField: "userId",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
-      { $unwind: { path: "$user", preserveNullAndEmptyArrays: false } },
-      {
-        $lookup: {
-          from: "songs",
-          localField: "songId",
-          foreignField: "_id",
-          as: "song",
-        },
-      },
-      { $unwind: { path: "$song", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "likehistoryofpostorvideos",
-          let: { videoId: "$_id" },
-          pipeline: [
-            { $match: { $expr: { $eq: ["$videoId", "$$videoId"] } } },
-            { $count: "count" },
-          ],
-          as: "totalLikesAgg",
-        },
-      },
-      {
-        $lookup: {
-          from: "postorvideocomments",
-          let: { videoId: "$_id" },
-          pipeline: [
-            { $match: { $expr: { $eq: ["$videoId", "$$videoId"] } } },
-            { $count: "count" },
-          ],
-          as: "totalCommentsAgg",
-        },
-      },
-      {
-        $lookup: {
-          from: "likehistoryofpostorvideos",
-          let: { videoId: "$_id", userId: userId },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [{ $eq: ["$videoId", "$$videoId"] }, { $eq: ["$userId", "$$userId"] }],
-                },
-              },
-            },
-            { $limit: 1 },
-          ],
-          as: "likeHistory",
-        },
-      },
-      {
-        $lookup: {
-          from: "followerfollowings",
-          let: { postUserId: "$userId", requestingUserId: userId },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [{ $eq: ["$toUserId", "$$postUserId"] }, { $eq: ["$fromUserId", "$$requestingUserId"] }],
-                },
-              },
-            },
-            { $limit: 1 },
-          ],
-          as: "isFollowAgg",
-        },
-      },
-      {
-        $project: {
-          caption: 1,
-          videoImage: 1,
-          videoUrl: 1,
-          assets: 1,
-          processingStatus: 1,
-          processingError: 1,
-          videoTime: 1,
-          createdAt: 1,
-          userId: "$user._id",
-          name: "$user.name",
-          userName: "$user.userName",
-          userImage: "$user.image",
-          isVerified: "$user.isVerified",
-          userIsFake: "$user.isFake",
-          isProfileImageBanned: "$user.isProfileImageBanned",
-          songId: 1,
-          songTitle: "$song.songTitle",
-          songImage: "$song.songImage",
-          songLink: "$song.songLink",
-          singerName: "$song.singerName",
-          isLike: { $gt: [{ $size: "$likeHistory" }, 0] },
-          isFollow: { $gt: [{ $size: "$isFollowAgg" }, 0] },
-          isSaved: { $in: [userId, { $ifNull: ["$savedBy", []] }] },
-          totalLikes: {
-            $ifNull: [{ $arrayElemAt: ["$totalLikesAgg.count", 0] }, 0],
-          },
-          totalComments: {
-            $ifNull: [{ $arrayElemAt: ["$totalCommentsAgg.count", 0] }, 0],
-          },
-          totalShares: "$shareCount",
-        },
-      },
-    ]);
-
-    const hasMore = videos.length > limit;
-    const rawItems = hasMore ? videos.slice(0, limit) : videos;
-    const items = rawItems.filter(isReelVisibleInFeed);
-    const lastItem = rawItems.length > 0 ? rawItems[rawItems.length - 1] : null;
-
-    const responsePayload = {
-      status: true,
-      message: "Retrieve the videos uploaded by users.",
-      data: items,
-      paging: {
-        hasMore,
-        nextCursorCreatedAt: hasMore ? lastItem.createdAt : null,
-        nextCursorId: hasMore ? lastItem._id : null,
-      },
-    };
-    console.log("[REELS_FEED][OK]", {
-      count: items.length,
-      hasMore,
-      ids: items.map((v) => String(v._id || "")),
+    const result = await fetchReelsFeedLite({
+      userId: req.query.userId,
+      limit: req.query.limit,
+      start: req.query.start,
+      cursorCreatedAt: req.query.cursorCreatedAt,
+      cursorId: req.query.cursorId,
+      videoId: req.query.videoId,
+      settingJSON,
     });
-    return res.status(200).json(responsePayload);
+
+    if (result.ok && result.body?.data?.length === 0 && !req.query.videoId && !req.query.cursorId) {
+      const fallback = await fetchTrendingFallbackFeed({
+        userId: req.query.userId,
+        limit: req.query.limit,
+        settingJSON,
+      });
+      if (fallback.ok) {
+        return res.status(fallback.status).json(fallback.body);
+      }
+    }
+
+    if (result.ok && result.body?.data) {
+      console.log("[REELS_FEED][OK]", {
+        count: result.body.data.length,
+        hasMore: result.body.paging?.hasMore,
+        fromCache: Boolean(result.fromCache),
+        ids: result.body.data.map((v) => String(v._id || "")),
+      });
+    }
+
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    console.log(error);
+    try {
+      const fallback = await fetchTrendingFallbackFeed({
+        userId: req.query.userId,
+        limit: req.query.limit,
+        settingJSON,
+      });
+      if (fallback.ok) {
+        return res.status(fallback.status).json(fallback.body);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return res.status(500).json({ status: false, message: error.message || "Internal Sever Error" });
+  }
+};
+
+exports.getReelsTrendingFallback = async (req, res) => {
+  try {
+    const result = await fetchTrendingFallbackFeed({
+      userId: req.query.userId,
+      limit: req.query.limit,
+      settingJSON,
+    });
+    return res.status(result.status).json(result.body);
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message || "Internal Sever Error" });

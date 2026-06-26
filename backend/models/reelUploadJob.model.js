@@ -12,6 +12,7 @@ const reelUploadJobSchema = new mongoose.Schema(
       index: true,
     },
     progress: { type: Number, default: 0, min: 0, max: 100 },
+    attemptCount: { type: Number, default: 1, min: 1 },
     queueJobId: { type: String, default: "" },
     error: { type: String, default: "" },
     startedAt: { type: Date, default: null },

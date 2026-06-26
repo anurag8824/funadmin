@@ -10,7 +10,7 @@ async function getActiveReelJob(videoId) {
     .lean();
 }
 
-async function createAndEnqueueReelJob({ videoId, userId, sourceUrl }) {
+async function createAndEnqueueReelJob({ videoId, userId, sourceUrl, attemptCount = 1 }) {
   const activeJob = await getActiveReelJob(videoId);
   if (activeJob) {
     return {
@@ -27,6 +27,7 @@ async function createAndEnqueueReelJob({ videoId, userId, sourceUrl }) {
       sourceUrl,
       state: "processing",
       progress: 5,
+      attemptCount,
       startedAt: new Date(),
     });
   } catch (err) {

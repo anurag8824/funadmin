@@ -3,6 +3,7 @@ const express = require("express");
 const route = express.Router();
 
 const checkAccessWithSecretKey = require("../../checkAccess");
+const { reelsFeedLimiter, reelsUploadLimiter } = require("../../middleware/reelsRateLimiter");
 
 //controller
 const VideoController = require("../../controllers/client/video.controller");
@@ -12,10 +13,7 @@ const VideoStreamController = require("../../controllers/client/videoStream.cont
 route.post(
   "/uploadvideo",
   checkAccessWithSecretKey(),
-  // upload.fields([
-  //   { name: "videoImage", maxCount: 5 },
-  //   { name: "videoUrl", maxCount: 5 },
-  // ]),
+  reelsUploadLimiter,
   VideoController.uploadvideo
 );
 
@@ -28,8 +26,10 @@ route.get("/videosOfUser", checkAccessWithSecretKey(), VideoController.videosOfU
 //if isFakeData on then real+fake videos otherwise fake videos
 route.get("/getAllVideos", checkAccessWithSecretKey(), VideoController.getAllVideos);
 //lightweight reels feed (metadata-first)
-route.get("/getReelsFeedLite", checkAccessWithSecretKey(), VideoController.getReelsFeedLite);
+route.get("/getReelsFeedLite", checkAccessWithSecretKey(), reelsFeedLimiter, VideoController.getReelsFeedLite);
+route.get("/getReelsTrendingFallback", checkAccessWithSecretKey(), reelsFeedLimiter, VideoController.getReelsTrendingFallback);
 route.get("/reelUploadJobStatus", checkAccessWithSecretKey(), VideoController.getReelUploadJobStatus);
+route.get("/reelPlayback", checkAccessWithSecretKey(), VideoController.getReelPlayback);
 route.post("/retryReelProcessing", checkAccessWithSecretKey(), VideoController.retryReelProcessing);
 
 //delete video

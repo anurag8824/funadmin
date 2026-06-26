@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const Video = require("../../models/video.model");
 const mongoose = require("mongoose");
+const { applyCdnCacheHeaders } = require("../../util/cdnCachePolicy");
 
 const uploadsDir = path.join(__dirname, "..", "..", "uploads");
 
@@ -75,7 +76,7 @@ exports.streamChunk = async (req, res) => {
 
       res.setHeader("Accept-Ranges", "bytes");
       res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "public, max-age=31536000");
+      applyCdnCacheHeaders(res, filePath);
 
       if (rangeHeader && (start > 0 || end < fileSize - 1)) {
         res.status(206);

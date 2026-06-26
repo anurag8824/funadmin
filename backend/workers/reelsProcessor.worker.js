@@ -1,21 +1,22 @@
 require("dotenv").config({ path: ".env" });
 const db = require("../util/connection");
 
-const ReelUploadJob = require("../models/reelUploadJob.model");
 const Video = require("../models/video.model");
 const { createReelsWorker } = require("../util/reelsQueue");
 const { processReelVideo } = require("../util/reelTranscodePipeline");
 const { deleteFromStorage } = require("../util/storageHelper");
+const {
+  markProcessingStarted,
+  markProcessingProgress,
+  completeProcessing,
+  failProcessing,
+} = require("../services/reels/videoProcessing.service");
 
 async function processor(job) {
   const { uploadJobId, videoId } = job.data;
-  const uploadJob = await ReelUploadJob.findById(uploadJobId);
-  if (!uploadJob) return;
 
   try {
-    uploadJob.state = "processing";
-    uploadJob.progress = 15;
-    await uploadJob.save();
+    await markProcessingStarted(uploadJobId);
     await job.updateProgress(15);
 
     const videoDoc = await Video.findById(videoId).select("videoUrl videoImage");
@@ -23,57 +24,40 @@ async function processor(job) {
       throw new Error("Video not found for reel processing");
     }
 
+    await markProcessingProgress(uploadJobId, 30);
+    await job.updateProgress(30);
+
     const pipelineResult = await processReelVideo({
       videoId,
       sourceUrl: videoDoc.videoUrl,
       fallbackThumbUrl: videoDoc.videoImage,
     });
 
-    uploadJob.progress = 80;
-    await uploadJob.save();
+    await markProcessingProgress(uploadJobId, 80);
     await job.updateProgress(80);
 
-    const finalStatus = pipelineResult.processingStatus || "ready";
-    const warningText = (pipelineResult.warnings || []).join(" | ");
-
-    await Video.updateOne(
-      { _id: videoId },
-      {
-        $set: {
-          processingStatus: finalStatus,
-          processingError: warningText,
-          assets: pipelineResult.assets,
-          videoUrl: pipelineResult.assets.hlsMasterUrl || pipelineResult.assets.mp4_720_url || videoDoc.videoUrl,
-          videoImage: pipelineResult.assets.thumbUrl || videoDoc.videoImage,
-        },
-      }
-    );
-
-    uploadJob.state = finalStatus;
-    uploadJob.error = warningText;
-    uploadJob.progress = 100;
-    uploadJob.completedAt = new Date();
-    await uploadJob.save();
+    await completeProcessing({
+      uploadJobId,
+      videoId,
+      pipelineResult,
+      sourceVideoUrl: videoDoc.videoUrl,
+      fallbackThumbUrl: videoDoc.videoImage,
+    });
     await job.updateProgress(100);
 
-    const shouldDeleteSource = String(process.env.REELS_DELETE_SOURCE_AFTER_PROCESSING || "false").toLowerCase() === "true";
-    if (shouldDeleteSource && videoDoc.videoUrl && videoDoc.videoUrl !== (pipelineResult.assets.hlsMasterUrl || pipelineResult.assets.mp4_720_url)) {
+    const shouldDeleteSource =
+      String(process.env.REELS_DELETE_SOURCE_AFTER_PROCESSING || "false").toLowerCase() === "true";
+    const processedUrl =
+      pipelineResult.assets?.hlsMasterUrl || pipelineResult.assets?.mp4_720_url;
+    if (shouldDeleteSource && videoDoc.videoUrl && videoDoc.videoUrl !== processedUrl) {
       await deleteFromStorage(videoDoc.videoUrl);
     }
   } catch (error) {
-    await Video.updateOne(
-      { _id: videoId },
-      {
-        $set: {
-          processingStatus: "failed",
-          processingError: error.message || "Unknown processing error",
-        },
-      }
-    );
-    uploadJob.state = "failed";
-    uploadJob.error = error.message || "Unknown processing error";
-    uploadJob.completedAt = new Date();
-    await uploadJob.save();
+    await failProcessing({
+      uploadJobId,
+      videoId,
+      errorMessage: error.message || "Unknown processing error",
+    });
     throw error;
   }
 }
@@ -103,4 +87,3 @@ if (require.main === module) {
 module.exports = {
   startReelsWorker,
 };
-
