@@ -79,11 +79,8 @@ db.once("open", async () => {
   console.log("Mongo: successfully connected to db");
   try {
     await ensureSettingsLoaded();
-    // Register socket handlers only after DB + settings are ready.
-    require("./socket");
-    console.log("✅ Socket handlers registered");
   } catch (err) {
-    console.error("❌ Post-connect bootstrap failed:", err);
+    console.error("❌ Settings bootstrap failed:", err);
   }
 });
 
@@ -95,6 +92,10 @@ global.io = require("socket.io")(server, {
   pingTimeout: 60000,
   connectTimeout: 45000,
 });
+
+// Load socket handlers before accepting traffic — require() is sync and blocks the event loop.
+require("./socket");
+console.log("✅ Socket handlers registered");
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

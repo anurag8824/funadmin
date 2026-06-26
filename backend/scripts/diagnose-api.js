@@ -18,7 +18,7 @@ function request(path, options = {}) {
         path,
         method: options.method || "GET",
         headers: options.headers || {},
-        timeout: options.timeoutMs || 8000,
+        timeout: options.timeoutMs || 15000,
       },
       (res) => {
         let body = "";
@@ -48,6 +48,8 @@ async function timed(path, options) {
 
 async function main() {
   console.log(`Diagnosing API on 127.0.0.1:${PORT}\n`);
+  console.log("Waiting 5s for PM2 process to finish booting...\n");
+  await new Promise((resolve) => setTimeout(resolve, 5000));
 
   try {
     const ping = await timed("/ping");
