@@ -25,14 +25,16 @@ const initialState: UserState = {
 };
 
 interface AllUsersPayload {
-  adminId: string;
+  adminId?: string;
   start?: number;
   limit?: number;
   startDate?: string;
-  data: any;
+  data?: any;
   endDate?: string;
   type?: string;
   email?: string;
+  password?: string;
+  code?: string;
 }
 
 export const signUpAdmin = createAsyncThunk(
