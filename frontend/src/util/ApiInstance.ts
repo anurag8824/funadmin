@@ -102,28 +102,48 @@ apiInstance.interceptors.response.use(
   }
 );
 
-const handleErrors = async (response: Response): Promise<any> => {
+const parseJsonSafe = async (response: Response): Promise<any> => {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
+const handleErrors = async (
+  response: Response,
+  requestUrl?: string
+): Promise<any> => {
+  // Express ETag support returns 304 with an empty body; fetch treats that as !ok.
+  if (response.status === 304 && requestUrl) {
+    const separator = requestUrl.includes("?") ? "&" : "?";
+    const retryUrl = `${requestUrl}${separator}_=${Date.now()}`;
+    const retryResponse = await fetch(retryUrl, fetchOptions("GET"));
+    return handleErrors(retryResponse, retryUrl);
+  }
+
   if (!response.ok) {
-    const data = await response.json();
+    const data = await parseJsonSafe(response);
 
+    if (response.status === 401) {
+      sessionStorage.clear();
+      localStorage.clear();
+      window.location.href = "/";
+      return Promise.reject(data);
+    }
 
-      if (response.status === 401) {
-        sessionStorage.clear();
-        localStorage.clear();
-        window.location.href = "/";
-        return Promise.reject(data);
-      }
-
-    if (Array.isArray(data.message)) {
+    if (Array.isArray(data?.message)) {
       data.message.forEach((msg: string) => setToast("error", msg));
     } else {
-      setToast("error", data.message || "Unexpected error occurred.");
+      setToast("error", data?.message || "Unexpected error occurred.");
     }
 
     return Promise.reject(data);
   }
 
-  return response.json();
+  return parseJsonSafe(response);
 };
 
 const getHeaders = (): { [key: string]: string } => ({
@@ -143,8 +163,12 @@ const fetchOptions = (method: string, body?: object): RequestInit => ({
 
 export const apiInstanceFetch = {
   baseURL,
-  get: (url: string) =>
-    fetch(`${baseURL}${url}`, fetchOptions("GET")).then(handleErrors),
+  get: (url: string) => {
+    const requestUrl = `${baseURL}${url}`;
+    return fetch(requestUrl, fetchOptions("GET")).then((response) =>
+      handleErrors(response, requestUrl)
+    );
+  },
 
   post: (url: string, data: object) =>
     fetch(`${baseURL}${url}`, fetchOptions("POST", data)).then(handleErrors),

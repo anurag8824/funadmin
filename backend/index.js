@@ -2,6 +2,17 @@
 const express = require("express");
 const app = express();
 
+// Admin/API JSON responses should never be cached by browsers (prevents empty 304 bodies).
+app.set("etag", false);
+app.use((req, res, next) => {
+  if (req.path.startsWith("/admin") || req.path.startsWith("/client")) {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+  }
+  next();
+});
+
 //dotenv (load before connection + routes)
 require("dotenv").config({ path: ".env" });
 
