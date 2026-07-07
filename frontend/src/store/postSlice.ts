@@ -165,12 +165,14 @@ const postReducer = createSlice({
     builder.addCase(
       allPost.fulfilled,
       (state, action: PayloadAction<any, string, { arg: AllPostPayload }>) => {
-        if (action.meta.arg.type === "realPost") {
-          state.realPost = action.payload.data;
-          state.totalRealPost = action?.payload?.total;
-        } else {
-          state.fakePostData = action.payload.data;
-          state.totalFakePost = action?.payload?.total;
+        if (action.payload?.status) {
+          if (action.meta.arg.type === "realPost") {
+            state.realPost = action.payload.data || [];
+            state.totalRealPost = action?.payload?.total || 0;
+          } else {
+            state.fakePostData = action.payload.data || [];
+            state.totalFakePost = action?.payload?.total || 0;
+          }
         }
         state.isLoading = false;
       }
@@ -190,7 +192,9 @@ const postReducer = createSlice({
     builder.addCase(
       getUserPost.fulfilled,
       (state, action: PayloadAction<any, string, { arg: PayloadAction }>) => {
-        state.userPostData = action.payload?.data;
+        if (action.payload?.status) {
+          state.userPostData = action.payload?.data || [];
+        }
         state.isLoading = false;
       }
     );
@@ -219,7 +223,9 @@ const postReducer = createSlice({
     builder.addCase(
       getPostDetails.fulfilled,
       (state, action: PayloadAction<any, string, { arg: PayloadAction }>) => {
-        state.postData = action.payload?.data;
+        if (action.payload?.status) {
+          state.postData = action.payload?.data || {};
+        }
         state.isLoading = false;
       }
     );

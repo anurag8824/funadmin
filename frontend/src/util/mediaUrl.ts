@@ -32,10 +32,10 @@ export function resolveVideoPlaybackUrl(video?: {
   return (
     resolveMediaUrl(video.playbackUrl) ||
     resolveMediaUrl(video.videoUrl) ||
-    resolveMediaUrl(video.assets?.hlsMasterUrl) ||
     resolveMediaUrl(video.assets?.mp4_720_url) ||
     resolveMediaUrl(video.assets?.mp4_1080_url) ||
     resolveMediaUrl(video.assets?.mp4_480_url) ||
+    resolveMediaUrl(video.assets?.hlsMasterUrl) ||
     resolveMediaUrl(video.assets?.previewUrl) ||
     ""
   );

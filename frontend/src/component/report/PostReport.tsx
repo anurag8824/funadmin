@@ -16,6 +16,7 @@ import { baseURL } from "@/util/config";
 import useClearSessionStorageOnPopState from "@/extra/ClearStorage";
 import { IconCheck, IconTrash } from "@tabler/icons-react";
 import noImage from "../../assets/images/noImage.png";
+import { resolveMediaUrl, resolvePostImageUrl } from "@/util/mediaUrl";
 
 const PostReport = (props) => {
   const { postReport, totalPostReport } = useSelector(
@@ -65,7 +66,7 @@ const PostReport = (props) => {
       body: "image",
       Cell: ({ row, index }: { row: any; index: number }) => (
         <img
-          src={ row?.postImage}
+          src={resolvePostImageUrl(row) || resolveMediaUrl(row?.postImage)}
           width="48px"
           height="48px"
           style={{ objectFit: "cover" }}

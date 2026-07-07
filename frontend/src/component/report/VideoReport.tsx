@@ -16,6 +16,7 @@ import { baseURL } from "@/util/config";
 import useClearSessionStorageOnPopState from "@/extra/ClearStorage";
 import { IconCheck, IconTrash } from "@tabler/icons-react";
 import noImage from "../../assets/images/noImage.png";
+import { resolveMediaUrl } from "@/util/mediaUrl";
 
 const VideoReport = (props) => {
   const startDate = props?.startDate;
@@ -63,7 +64,7 @@ const VideoReport = (props) => {
       body: "image",
       Cell: ({ row, index }: { row: any; index: number }) => (
         <img
-          src={ row?.videoImage}
+          src={resolveMediaUrl(row?.videoImage)}
           width="48px"
           height="48px"
           style={{ objectFit: "cover" }}

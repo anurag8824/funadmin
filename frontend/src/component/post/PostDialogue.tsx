@@ -36,7 +36,7 @@ const PostDialogue: React.FC = () => {
   
   useEffect(() => {
     setData(postData);
-  }, [dialogueData]);
+  }, [postData]);
 
   useEffect(() => {
     dispatch(getPostDetails(dialogueData?._id));
@@ -58,7 +58,8 @@ const PostDialogue: React.FC = () => {
   };
 
   const maxLength = 10; // Number of characters to show initially
-  const caption = dialogueData?.caption || "";
+  const caption = postData?.caption || dialogueData?.caption || "";
+  const displayPost = postData && Object.keys(postData).length > 0 ? postData : dialogueData;
 
   return (
     <div>
@@ -100,13 +101,13 @@ const PostDialogue: React.FC = () => {
           <div className="row mt-3">
             <span className="fw-bold">Post</span>
 
-            <Link href={resolvePostImageUrl(dialogueData)} target='_blank'>
+            <Link href={resolvePostImageUrl(displayPost)} target='_blank'>
             <img
-              src={resolvePostImageUrl(dialogueData)}
+              src={resolvePostImageUrl(displayPost)}
               alt="Post"
               height={400}
               style={{ objectFit: "contain", width: "100%", height: "350px",
-                opacity :  dialogueData?.postImage[0]?.isBanned === true ? 0.5 : 1
+                opacity :  displayPost?.postImage?.[0]?.isBanned === true ? 0.5 : 1
                }}
             />
             </Link>

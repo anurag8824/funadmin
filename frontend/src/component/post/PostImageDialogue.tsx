@@ -6,7 +6,7 @@ import Button from "@/extra/Button";
 import { closeDialog } from "@/store/dialogSlice";
 import { getPostDetails } from "@/store/postSlice";
 import noImage from "@/assets/images/noImage.png";
-import { baseURL } from "@/util/config";
+import { resolveMediaUrl } from "@/util/mediaUrl";
 
 const style = {
   position: "absolute",
@@ -37,7 +37,7 @@ const PostImageDialogue: React.FC = () => {
 
   useEffect(() => {
     setData(postData);
-  }, [dialogueData]);
+  }, [postData]);
 
   useEffect(() => {
     dispatch(getPostDetails(dialogueData?._id));
@@ -59,7 +59,10 @@ const PostImageDialogue: React.FC = () => {
   };
 
   const maxLength = 10; // Number of characters to show initially
-  const caption = dialogueData?.caption || "";
+  const caption = postData?.caption || dialogueData?.caption || "";
+  const images = postData?.postImage || dialogueData?.postImage || [];
+  const hashtags = postData?.hashTags || dialogueData?.hashTags || [];
+  const hashTagIds = postData?.hashTagId || dialogueData?.hashTagId || [];
 
   const settings = {
     dots: true,
@@ -96,7 +99,7 @@ const PostImageDialogue: React.FC = () => {
                   gap: "20px",
                 }}
               >
-                {dialogueData.postImage?.map((post, index) => (
+                {images?.map((post, index) => (
                   <div
                     key={index}
                     style={{
@@ -113,7 +116,7 @@ const PostImageDialogue: React.FC = () => {
                   >
                     {post.url ? (
                       <img
-                        src={ post.url}
+                        src={resolveMediaUrl(post.url)}
                         alt={`Post ${index + 1}`}
                         style={{
                           width: "100%",
@@ -154,8 +157,8 @@ const PostImageDialogue: React.FC = () => {
                 {dialogueData?.caption?.length > 50 ? (
                   <div>
                     {showFullCaption
-                      ? dialogueData?.caption
-                      : dialogueData?.caption.slice(0, 50) + "... "}
+                      ? caption
+                      : caption.slice(0, 50) + "... "}
                     {!showFullCaption && (
                       <span
                         onClick={() => setShowFullCaption(true)}
@@ -170,14 +173,14 @@ const PostImageDialogue: React.FC = () => {
                     )}
                   </div>
                 ) : (
-                  dialogueData?.caption // Show the full caption directly if it's ≤ 50 characters
+                  caption // Show the full caption directly if it's ≤ 50 characters
                 )}
               </Typography>
             </div>
 
             {/* Hashtags Section */}
             <h6 className="mt-2 images-class">
-              {dialogueData?.hashTags?.length > 0 && "Hashtag :"}
+              {hashtags?.length > 0 && "Hashtag :"}
             </h6>
 
             <div
@@ -188,8 +191,8 @@ const PostImageDialogue: React.FC = () => {
                 marginTop: "15px",
               }}
             >
-              {dialogueData?.hashTags
-                ? dialogueData?.hashTags?.map((tag, index) => (
+              {hashtags?.length > 0
+                ? hashtags.map((tag, index) => (
                     <div
                       key={index}
                       style={{
@@ -202,7 +205,7 @@ const PostImageDialogue: React.FC = () => {
                       }}
                     >
                       <img
-                        src={ tag.hashTagBanner}
+                        src={resolveMediaUrl(tag.hashTagBanner)}
                         alt={tag.name}
                         style={{
                           width: "40px",
@@ -222,7 +225,7 @@ const PostImageDialogue: React.FC = () => {
                       </b>
                     </div>
                   ))
-                : dialogueData?.hashTagId?.map((tag, index) => (
+                : hashTagIds?.map((tag, index) => (
                     <div
                       key={index}
                       style={{
@@ -235,7 +238,7 @@ const PostImageDialogue: React.FC = () => {
                       }}
                     >
                       <img
-                        src={ tag.hashTagIcon}
+                        src={resolveMediaUrl(tag.hashTagIcon)}
                         alt={tag.name}
                         style={{
                           width: "40px",

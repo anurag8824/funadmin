@@ -19,6 +19,7 @@ import VideoDialogue from "./VideoDialogue";
 import { IconEdit, IconTrash, IconVideo } from "@tabler/icons-react";
 import NoImage from "../../assets/images/noImage.png";
 import NoImageUser from "../../assets/images/user.png";
+import { resolveMediaUrl } from "@/util/mediaUrl";
 
 
 interface FakeVideoProps {
@@ -109,9 +110,7 @@ const FakeVideo: React.FC<FakeVideoProps> = (props) => {
       body: "videoImage",
       Cell: ({ row }: { row: any }) => (
         <img
-          src={
-             row?.videoImage
-          }
+          src={resolveMediaUrl(row?.videoImage)}
           width="50px"
           height="50px"
           alt="Video Image"
@@ -134,9 +133,7 @@ const FakeVideo: React.FC<FakeVideoProps> = (props) => {
           onClick={() => handleEdit(row)}
           >
             <img
-              src={
-                row?.userImage
-              }
+              src={resolveMediaUrl(row?.userImage)}
               width="50px"
               height="50px"
               style={{ marginRight: "10px" }}

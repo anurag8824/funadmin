@@ -132,7 +132,7 @@ const Video: React.FC<VideoProps> = (props) => {
           }}
           onClick={() => handleEdit(row)}
         >
-          <img src={ row?.userImage} width="50px" height="50px"  onError={(e) => {
+          <img src={resolveMediaUrl(row?.userImage)} width="50px" height="50px"  onError={(e) => {
                   e.currentTarget.src = NoImageUser.src;
                 }}/>
           <span className="text-capitalize  ms-3 cursorPointer text-nowrap">

@@ -130,40 +130,31 @@ const getHeaders = (): { [key: string]: string } => ({
   key: secretKey,
   Authorization: getTokenData() ? `${getTokenData()}` : "",
   "Content-Type": "application/json",
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+});
+
+const fetchOptions = (method: string, body?: object): RequestInit => ({
+  method,
+  headers: getHeaders(),
+  cache: "no-store",
+  ...(body ? { body: JSON.stringify(body) } : {}),
 });
 
 export const apiInstanceFetch = {
   baseURL,
   get: (url: string) =>
-    fetch(`${baseURL}${url}`, { method: "GET", headers: getHeaders() }).then(
-      handleErrors
-    ),
+    fetch(`${baseURL}${url}`, fetchOptions("GET")).then(handleErrors),
 
   post: (url: string, data: object) =>
-    fetch(`${baseURL}${url}`, {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify(data),
-    }).then(handleErrors),
+    fetch(`${baseURL}${url}`, fetchOptions("POST", data)).then(handleErrors),
 
   patch: (url: string, data: object) =>
-    fetch(`${baseURL}${url}`, {
-      method: "PATCH",
-      headers: getHeaders(),
-      body: JSON.stringify(data),
-    }).then(handleErrors),
+    fetch(`${baseURL}${url}`, fetchOptions("PATCH", data)).then(handleErrors),
 
   put: (url: string, data: object) =>
-    fetch(`${baseURL}${url}`, {
-      method: "PUT",
-      headers: getHeaders(),
-      body: JSON.stringify(data),
-    }).then(handleErrors),
+    fetch(`${baseURL}${url}`, fetchOptions("PUT", data)).then(handleErrors),
 
-  delete: (url: string ,  data : object) =>
-    fetch(`${baseURL}${url}`, {
-      method: "DELETE",
-      headers: getHeaders(),
-      body: JSON.stringify(data)
-    }).then(handleErrors),
+  delete: (url: string, data: object) =>
+    fetch(`${baseURL}${url}`, fetchOptions("DELETE", data)).then(handleErrors),
 };

@@ -558,10 +558,6 @@ exports.getUserPost = async (req, res, next) => {
       return res.status(200).json({ status: false, message: "User does not found." });
     }
 
-    if (user.isBlock) {
-      return res.status(200).json({ status: false, message: "You are blocked by the admin." });
-    }
-
     return res.status(200).json({
       status: true,
       message: "Retrive posts of the particular user.",
