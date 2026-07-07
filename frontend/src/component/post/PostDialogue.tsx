@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import Button from "@/extra/Button";
 import { closeDialog } from "@/store/dialogSlice";
-import { baseURL } from "@/util/config";
+import { resolveMediaUrl, resolvePostImageUrl } from "@/util/mediaUrl";
 import { getPostDetails } from "@/store/postSlice";
 import Link from 'next/link';
 
@@ -100,9 +100,9 @@ const PostDialogue: React.FC = () => {
           <div className="row mt-3">
             <span className="fw-bold">Post</span>
 
-            <Link href={ dialogueData?.mainPostImage} target='_blank'>
+            <Link href={resolvePostImageUrl(dialogueData)} target='_blank'>
             <img
-              src={ dialogueData?.mainPostImage}
+              src={resolvePostImageUrl(dialogueData)}
               alt="Post"
               height={400}
               style={{ objectFit: "contain", width: "100%", height: "350px",

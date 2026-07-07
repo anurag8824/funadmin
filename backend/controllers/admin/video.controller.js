@@ -14,6 +14,7 @@ const Notification = require("../../models/notification.model");
 
 //deleteFromStorage
 const { deleteFromStorage } = require("../../util/storageHelper");
+const { enrichAdminVideo, enrichAdminVideos } = require("../../util/adminMediaUrl");
 
 //generateUniqueVideoOrPostId
 const { generateUniqueVideoOrPostId } = require("../../util/generateUniqueVideoOrPostId");
@@ -346,6 +347,8 @@ exports.getVideos = async (req, res, next) => {
               videoTime: 1,
               videoUrl: 1,
               videoImage: 1,
+              assets: 1,
+              processingStatus: 1,
               isFake: 1,
               createdAt: 1,
               totalLikes: { $size: "$likes" },
@@ -367,7 +370,7 @@ exports.getVideos = async (req, res, next) => {
         status: true,
         message: `Retrive real videos of the users.`,
         totalVideo: totalRealVideoOfUser,
-        videos: realVideoOfUser,
+        videos: enrichAdminVideos(realVideoOfUser),
       });
     } else if (req.query.type === "fakeVideo") {
       const [totalFakeVideoOfUser, fakeVideoOfUser] = await Promise.all([
@@ -418,6 +421,8 @@ exports.getVideos = async (req, res, next) => {
               videoTime: 1,
               videoUrl: 1,
               videoImage: 1,
+              assets: 1,
+              processingStatus: 1,
               isFake: 1,
               createdAt: 1,
               totalLikes: { $size: "$likes" },
@@ -439,7 +444,7 @@ exports.getVideos = async (req, res, next) => {
         status: true,
         message: `Retrive fake videos of the users.`,
         totalVideo: totalFakeVideoOfUser,
-        videos: fakeVideoOfUser,
+        videos: enrichAdminVideos(fakeVideoOfUser),
       });
     } else {
       return res.status(200).json({ status: false, message: "type must be passed valid." });
@@ -511,6 +516,8 @@ exports.getVideosOfUser = async (req, res, next) => {
             videoTime: 1,
             videoUrl: 1,
             videoImage: 1,
+            assets: 1,
+            processingStatus: 1,
             isFake: 1,
             createdAt: 1,
             totalLikes: { $size: "$likes" },
@@ -536,7 +543,7 @@ exports.getVideosOfUser = async (req, res, next) => {
       status: true,
       message: `Retrive videos of the users.`,
       total: totalVideoOfUser,
-      data: realVideoOfUser,
+      data: enrichAdminVideos(realVideoOfUser),
     });
   } catch (error) {
     console.log(error);
@@ -561,7 +568,7 @@ exports.getDetailOfVideo = async (req, res, next) => {
     return res.status(200).json({
       status: true,
       message: "Retrive video's details.",
-      data: video,
+      data: enrichAdminVideo(video),
     });
   } catch (error) {
     console.log(error);

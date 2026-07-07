@@ -12,7 +12,7 @@ import { allVideo, deleteFakeVideo } from "../../store/videoSlice";
 import { RootStore, useAppDispatch } from "../../store/store";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { baseURL } from "@/util/config";
+import { resolveMediaUrl, resolveVideoPlaybackUrl } from "@/util/mediaUrl";
 import useClearSessionStorageOnPopState from "@/extra/ClearStorage";
 import VideoDialogue from "./VideoDialogue";
 import FakeVideo from "./FakeVideo";
@@ -111,7 +111,7 @@ const Video: React.FC<VideoProps> = (props) => {
       body: "videoImage",
       Cell: ({ row }: { row: any }) => (
         <img
-          src={ row?.videoImage}
+          src={resolveMediaUrl(row?.videoImage)}
           width="50px"
           height="50px"
           alt="Video Image"

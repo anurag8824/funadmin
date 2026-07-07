@@ -12,6 +12,7 @@ const Report = require("../../models/report.model");
 
 //deleteFromStorage
 const { deleteFromStorage } = require("../../util/storageHelper");
+const { enrichAdminPost, enrichAdminPosts } = require("../../util/adminMediaUrl");
 
 //mongoose
 const mongoose = require("mongoose");
@@ -390,7 +391,7 @@ exports.getPosts = async (req, res, next) => {
         status: true,
         message: `Retrive real posts of the users.`,
         total: totalrealPostOfUser,
-        data: realPostOfUser,
+        data: enrichAdminPosts(realPostOfUser),
       });
     } else if (req.query.type === "fakePost") {
       const [totalfakePostOfUser, fakePostOfUser] = await Promise.all([
@@ -463,7 +464,7 @@ exports.getPosts = async (req, res, next) => {
         status: true,
         message: `Retrive fake posts of the users.`,
         total: totalfakePostOfUser,
-        data: fakePostOfUser,
+        data: enrichAdminPosts(fakePostOfUser),
       });
     } else {
       return res.status(200).json({ status: false, message: "type must be passed valid." });
@@ -565,7 +566,7 @@ exports.getUserPost = async (req, res, next) => {
       status: true,
       message: "Retrive posts of the particular user.",
       total: totalPostOfUser,
-      data: posts,
+      data: enrichAdminPosts(posts),
     });
   } catch (error) {
     console.log(error);
@@ -590,7 +591,7 @@ exports.getDetailOfPost = async (req, res, next) => {
     return res.status(200).json({
       status: true,
       message: "Retrive post's details.",
-      data: post,
+      data: enrichAdminPost(post),
     });
   } catch (error) {
     console.log(error);

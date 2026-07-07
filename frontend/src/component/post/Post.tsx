@@ -11,7 +11,7 @@ import { allPost, deleteFakePost } from "../../store/postSlice";
 import { warning } from "../../util/Alert";
 import { openDialog } from "@/store/dialogSlice";
 import { useRouter } from "next/router";
-import { baseURL } from "@/util/config";
+import { resolveMediaUrl, resolvePostImageUrl } from "@/util/mediaUrl";
 import useClearSessionStorageOnPopState from "@/extra/ClearStorage";
 import PostDialogue from "./PostDialogue";
 import PostImageDialogue from "./PostImageDialogue";
@@ -110,9 +110,7 @@ const Post: React.FC<PostProps> = (props) => {
           onClick={() => handleEdit(row, "managePost")}
         >
           <img
-            src={
-              row?.userImage 
-            }
+            src={resolveMediaUrl(row?.userImage)}
             width="50px"
             height="50px"
              onError={(e)=>{

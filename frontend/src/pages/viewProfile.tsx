@@ -75,7 +75,7 @@ export default function viewProfile(props) {
 
   useEffect(() => {
     dispatch(getCountry());
-    if (!router.isReady) return;
+    if (!router.isReady || !userId) return;
     const payload: any = {
       start: page,
       limit: size,
@@ -83,7 +83,7 @@ export default function viewProfile(props) {
     };
     dispatch(getUserPost(payload));
     dispatch(getUserVideo(userId));
-  }, [router.isReady, dispatch]);
+  }, [router.isReady, userId, page, size, dispatch]);
 
   useEffect(() => {
     if (!router.isReady) return;

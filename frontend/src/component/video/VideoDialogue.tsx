@@ -5,6 +5,7 @@ import { useSelector } from "react-redux";
 import Button from "@/extra/Button";
 import { closeDialog } from "@/store/dialogSlice";
 import { baseURL } from "@/util/config";
+import { resolveMediaUrl, resolveVideoPlaybackUrl, resolvePostImageUrl } from "@/util/mediaUrl";
 import { getVideoDetails } from "@/store/videoSlice";
 import HashtagaBanner from "../../assets/images/hashtagbanner.png";
 import { getHashtag } from "@/store/hashTagSlice";
@@ -101,7 +102,7 @@ const VideoDialogue: React.FC = () => {
                 <>
                   <video
                     controls
-                    src={dialogueData?.videoUrl}
+                    src={resolveVideoPlaybackUrl(dialogueData)}
                     width={0}
                     height={350}
                     style={{ objectFit: "contain", width: "full" }}
