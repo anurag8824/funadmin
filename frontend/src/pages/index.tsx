@@ -1,29 +1,28 @@
-"use client";
-import { Inter } from "next/font/google";
-import Login from "./login";
-import { useCallback, useEffect, useRef, useState } from "react";
-import axios from "axios";
-import Registration from "./Registration";
-
-const inter = Inter({ subsets: ["latin"] });
-
-const Home = () => {
-  const [login, setLogin] = useState(true);
-
-  useEffect(() => {
-    axios
-      .get("admin/login")
-      .then((res) => {
-        setLogin(res.data.login);
-      })
-      .catch((err) => {
-        console.log(err);
-      });
-  }, []);
-
- 
-
-  return login ? <Login /> : <Registration />;
-};
-
-export default Home;
+"use client";
+import Login from "./login";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import Registration from "./Registration";
+import { secretKey } from "@/util/config";
+
+const Home = () => {
+  const [showLogin, setShowLogin] = useState(true);
+
+  useEffect(() => {
+    axios
+      .get("admin/login", {
+        headers: { key: secretKey },
+      })
+      .then((res) => {
+        setShowLogin(res.data?.login ?? true);
+      })
+      .catch((err) => {
+        console.log(err);
+        setShowLogin(true);
+      });
+  }, []);
+
+  return showLogin ? <Login /> : <Registration />;
+};
+
+export default Home;

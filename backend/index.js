@@ -82,6 +82,12 @@ db.once("open", async () => {
   } catch (err) {
     console.error("❌ Settings bootstrap failed:", err);
   }
+  try {
+    const { ensurePurchaseCode } = require("./util/ensurePurchaseCode");
+    await ensurePurchaseCode();
+  } catch (err) {
+    console.error("❌ Purchase code bootstrap failed:", err);
+  }
 });
 
 //socket io

@@ -1,25 +1,40 @@
-"use-client";
+"use client";
 import { useEffect } from "react";
 import { useRouter } from "next/router";
+
+const PUBLIC_ROUTES = new Set([
+  "/",
+  "/login",
+  "/Registration",
+  "/forgotPassword",
+]);
 
 interface AuthCheckProps {
   children: React.ReactNode;
 }
 
-const AuthCheck = (props: any) => {
+const AuthCheck = ({ children }: AuthCheckProps) => {
   const router = useRouter();
 
-  let isAuth: any = "";
-  if (typeof window !== "undefined") {
-    isAuth = sessionStorage.getItem("isAuth");
-  }
   useEffect(() => {
-    if (!isAuth || isAuth !== "true") {
-      router.push("/");
+    if (typeof window === "undefined") {
+      return;
     }
-  }, [isAuth]);
 
-  return <>{props.children}</>;
+    const isAuth = sessionStorage.getItem("isAuth") === "true";
+    const isPublicRoute = PUBLIC_ROUTES.has(router.pathname);
+
+    if (!isAuth && !isPublicRoute) {
+      router.replace("/");
+      return;
+    }
+
+    if (isAuth && isPublicRoute) {
+      router.replace("/dashboard");
+    }
+  }, [router.pathname]);
+
+  return <>{children}</>;
 };
 
 export default AuthCheck;

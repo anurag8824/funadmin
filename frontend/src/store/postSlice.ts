@@ -1,5 +1,5 @@
 import { apiInstance, apiInstanceFetch } from "@/util/ApiInstance";
-import { baseURL } from "@/util/config";
+import { baseURL, secretKey } from "@/util/config";
 import { setToast } from "@/util/toastServices";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
@@ -119,14 +119,30 @@ export const updateFakePost = createAsyncThunk(
 export const uploadMultipleFiles = createAsyncThunk(
   "admin/file/upload-file",
   async (payload: any | undefined) => {
-    return axios.put(`/admin/file/upload_multiple_files`, payload?.data);
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+    return axios.put(`admin/file/upload_multiple_files`, payload?.data, {
+      headers: {
+        key: secretKey,
+        ...(token ? { Authorization: token } : {}),
+      },
+    });
   }
 );
 
 export const uploadFile = createAsyncThunk(
   "admin/file/upload-single-file",
   async (payload: any | undefined) => {
-    return axios.post(`admin/file/upload-file`, payload?.data);
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+    return axios.post(`admin/file/upload-file`, payload?.data, {
+      headers: {
+        key: secretKey,
+        ...(token ? { Authorization: token } : {}),
+      },
+    });
   }
 );
 

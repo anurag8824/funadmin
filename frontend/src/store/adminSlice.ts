@@ -38,14 +38,21 @@ interface AllUsersPayload {
 export const signUpAdmin = createAsyncThunk(
   "admin/admin/signUp",
   async (payload: AllUsersPayload | undefined) => {
-    return axios.post("admin/admin/signUp", payload);
+    return axios.post("admin/admin/signUp", {
+      email: payload?.email,
+      password: payload?.password,
+      code: payload?.code,
+    });
   }
 );
 
 export const login = createAsyncThunk(
   "admin/admin/login",
   async (payload: AllUsersPayload | undefined) => {
-    return apiInstanceFetch.post("admin/admin/login", payload);
+    return apiInstanceFetch.post("admin/admin/login", {
+      email: payload?.email,
+      password: payload?.password,
+    });
   }
 );
 
@@ -78,8 +85,15 @@ export const adminProfileUpdated = createAsyncThunk(
 export const uploadFile = createAsyncThunk(
   "admin/file/upload-file",
   async (payload: AllUsersPayload | undefined) => {
-      
-    return axios.post(`admin/file/upload-file`, payload?.data);
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+    return axios.post(`admin/file/upload-file`, payload?.data, {
+      headers: {
+        key: secretKey,
+        ...(token ? { Authorization: token } : {}),
+      },
+    });
   }
 );  
 

@@ -41,7 +41,7 @@ const getTokenData = (): string | null => {
 export const apiInstance: AxiosInstance = axios.create({
   baseURL,
   headers: {
-    secretKey,
+    key: secretKey,
     "Content-Type": "application/json",
   },
 });

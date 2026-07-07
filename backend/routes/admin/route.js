@@ -31,8 +31,10 @@ const reaction = require("./reaction.route");
 const story = require("./story.route");
 const login = require("./login.route");
 const file = require("./file.route");
+const adminAuth = require("./adminAuth.route");
 
-//exports admin's route.js
+// Clean auth routes (DB purchase code) — mounted before legacy obfuscated routes.
+route.use("/admin", adminAuth);
 route.use("/admin", admin);
 route.use("/post", AdminMiddleware, post);
 route.use("/setting", AdminMiddleware, setting);
