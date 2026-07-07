@@ -27,7 +27,7 @@ const nextConfig = {
       process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000/",
     NEXT_PUBLIC_SECRET_KEY: process.env.NEXT_PUBLIC_SECRET_KEY || "",
     NEXT_PUBLIC_PROJECT_NAME:
-      process.env.NEXT_PUBLIC_PROJECT_NAME || "FuntApp Admin",
+      process.env.NEXT_PUBLIC_PROJECT_NAME || "FuntApp",
   },
   images: {
     remotePatterns: getImageRemotePatterns(),

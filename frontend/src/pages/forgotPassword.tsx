@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Button from "../extra/Button";
-import Logo from "../assets/images/shorty-logo 1.png";
+import Logo from "../assets/images/funtapp_logo.png";
 import Input from "../extra/Input";
 import { useDispatch } from "react-redux";
 import { projectName } from "@/util/config";
@@ -62,9 +62,9 @@ function ForgotPassword(props) {
             <div className="col-12 d-flex justify-content-center align-items-center">
               <div className="login-page-box ">
                 <div className="login-box-img">
-                  <Image src={Logo} alt="logo" width={40} />
+                  <Image src={Logo} alt="FuntApp logo" width={40} />
                   <h3
-                    className="custom-shortie-color"
+                    className="custom-funtapp-color"
                     style={{
                       fontWeight: 900,
                       fontSize: "30px",

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Logo from "../assets/images/shorty-logo 1.png";
+import Logo from "../assets/images/funtapp_logo.png";
 import { projectName } from "@/util/config";
 import Input from "@/extra/Input";
 import Button from "@/extra/Button";
@@ -58,7 +58,7 @@ const changePassword = () => {
               <div className="col-12 d-flex justify-content-center align-items-center">
                 <div className="login-page-box ">
                   <div className="login-box-img">
-                    <Image src={Logo} alt="logo" width={40} />
+                    <Image src={Logo} alt="FuntApp logo" width={40} />
                     <h5>{projectName}</h5>
                   </div>
                   <div className="login-form">

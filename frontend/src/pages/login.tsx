@@ -3,9 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { login } from "../store/adminSlice";
 import Input from "../extra/Input";
-// import Logo from "../assets/images/shorty-logo 1.png";
-import LogoBg from "../assets/images/loginPageBg.png";
-import Logo from "../assets/images/ShortieLogo.png";
+import Logo from "../assets/images/funtapp_logo.png";
 import LoginImg from "../assets/images/loginimage2.png";
 import Image from "next/image";
 import { useAppDispatch } from "@/store/store";
@@ -91,7 +89,7 @@ const [type, setType] = useState("text")
               <div>
                 <Image
                   src={Logo}
-                  alt="Logo"
+                  alt="FuntApp logo"
                   className="mb-2"
                   height={75}
                   width={75}

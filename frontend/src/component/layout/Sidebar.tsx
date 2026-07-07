@@ -1,5 +1,5 @@
 "use client";
-import Logo from "../../assets/images/shorty-logo 1.png";
+import Logo from "../../assets/images/funtapp_logo.png";
 
 import "../../assets/js/custom";
 import Navigator from "../../extra/Navigator";
@@ -246,7 +246,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
               href="/admin/dashboard"
               className="d-flex align-items-center cursor-pointer"
             >
-              <Image src={Logo} alt="logo" width={35} />
+              <Image src={Logo} alt="FuntApp logo" width={35} />
               <span
                 className="fs-4 fw-semibold"
                 style={{ color: "rgb(47 43 61 / 0.9)" }}

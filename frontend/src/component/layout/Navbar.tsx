@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import Logo from "../../assets/images/logo.svg";
+import Logo from "../../assets/images/funtapp_logo.png";
 import { useSelector } from "react-redux";
 import Link from "next/link";
 import Image from "next/image";
@@ -57,7 +57,7 @@ const Navbar = () => {
                     href={"/admin/dashboard"}
                     className="d-flex align-items-center"
                   >
-                    <Image src={Logo} alt="logo" width={40} />
+                    <Image src={Logo} alt="FuntApp logo" width={40} />
                     <span className="fs-3 fw-bold">{projectName}</span>
                   </Link>
                 </div>

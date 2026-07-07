@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { login, signUpAdmin } from "../store/adminSlice";
 import Input from "../extra/Input";
-import Logo from "../assets/images/ShortieLogo.png";
+import Logo from "../assets/images/funtapp_logo.png";
 import LogoBg from "../assets/images/loginPageBg.png";
 import LoginImg from "../assets/images/loginimage2.png";
 import Image from "next/image";
@@ -85,7 +85,7 @@ export default function Registration() {
               <div>
                 <Image
                   src={Logo}
-                  alt="Logo"
+                  alt="FuntApp logo"
                   className="mb-2"
                   height={75}
                   width={75}
