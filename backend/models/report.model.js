@@ -8,9 +8,10 @@ const reportSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     videoId: { type: mongoose.Schema.Types.ObjectId, ref: "Video", default: null },
     postId: { type: mongoose.Schema.Types.ObjectId, ref: "Post", default: null },
+    storyId: { type: mongoose.Schema.Types.ObjectId, ref: "Story", default: null },
     toUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     reportReason: { type: String, default: "" },
-    type: { type: Number, enum: TYPE_OF_REPORT }, // 1.video 2.post 3.user-user
+    type: { type: Number, enum: TYPE_OF_REPORT }, // 1.video 2.post 3.user-user 4.story
     status: { type: Number, enum: STATUS_OF_REPORT, default: 1 }, // 1.pending 2.solved
   },
   {
@@ -24,6 +25,7 @@ reportSchema.index({ userId: 1 });
 reportSchema.index({ toUserId: 1 });
 reportSchema.index({ videoId: 1 });
 reportSchema.index({ postId: 1 });
+reportSchema.index({ storyId: 1 });
 reportSchema.index({ status: 1 });
 
 module.exports = mongoose.model("Report", reportSchema);

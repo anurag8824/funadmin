@@ -1,25 +1,68 @@
 const { selectPlaybackUrls } = require("../services/reels/videoService");
 
+const MEDIA_FILE_PATTERN =
+  /\.(jpg|jpeg|png|gif|webp|bmp|svg|mp4|mov|webm|mkv|m3u8)$/i;
+
+function apiBase() {
+  return (process.env.baseURL || "https://api.funtaap.com").replace(/\/+$/, "");
+}
+
+function isAbsoluteUrl(url) {
+  return (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  );
+}
+
+function toUploadPath(url) {
+  const trimmed = String(url).trim();
+
+  if (trimmed.startsWith("/uploads/")) {
+    return trimmed;
+  }
+
+  if (!trimmed.includes("/") && MEDIA_FILE_PATTERN.test(trimmed)) {
+    return `/uploads/${trimmed}`;
+  }
+
+  if (trimmed.startsWith("uploads/")) {
+    return `/${trimmed}`;
+  }
+
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
 function toAbsoluteMediaUrl(url) {
   if (!url) return "";
 
   const trimmed = String(url).trim();
   if (!trimmed) return "";
 
-  if (
-    trimmed.startsWith("http://") ||
-    trimmed.startsWith("https://") ||
-    trimmed.startsWith("blob:") ||
-    trimmed.startsWith("data:")
-  ) {
+  if (trimmed.startsWith("blob:") || trimmed.startsWith("data:")) {
     return trimmed;
   }
 
-  const base = (process.env.baseURL || "https://api.funtaap.com").replace(
-    /\/+$/,
-    ""
-  );
-  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const base = apiBase();
+
+  if (isAbsoluteUrl(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      if (
+        parsed.pathname.startsWith("/uploads/") ||
+        MEDIA_FILE_PATTERN.test(parsed.pathname)
+      ) {
+        const path = toUploadPath(parsed.pathname);
+        return `${base}${path}${parsed.search}`;
+      }
+    } catch {
+      return trimmed;
+    }
+    return trimmed;
+  }
+
+  const path = toUploadPath(trimmed);
   return `${base}${path}`;
 }
 

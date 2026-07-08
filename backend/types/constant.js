@@ -48,6 +48,7 @@ exports.TYPE_OF_REPORT = {
   VIDEO: 1,
   POST: 2,
   USERTOUSER: 3,
+  STORY: 4,
 };
 
 exports.STATUS_OF_REPORT = {

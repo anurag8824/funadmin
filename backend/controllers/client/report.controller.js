@@ -4,6 +4,7 @@ const Report = require("../../models/report.model");
 const User = require("../../models/user.model");
 const Video = require("../../models/video.model");
 const Post = require("../../models/post.model");
+const Story = require("../../models/story.model");
 const ReportReason = require("../../models/reportReason.model");
 
 //mongoose
@@ -12,10 +13,17 @@ const mongoose = require("mongoose");
 //private key
 const admin = require("../../util/privateKey");
 
+function resolveReportType(type) {
+  if (type === "video") return 1;
+  if (type === "post") return 2;
+  if (type === "story") return 4;
+  return 3; // user
+}
+
 //report made by particular user
 exports.reportByUser = async (req, res) => {
   try {
-    const { reportReason, type, userId, videoId, postId, toUserId } = req.query;
+    const { reportReason, type, userId, videoId, postId, toUserId, storyId } = req.query;
     if (!reportReason || !type || !userId) {
       return res.status(400).json({ status: false, message: "Invalid request details." });
     }
@@ -24,16 +32,20 @@ exports.reportByUser = async (req, res) => {
     const videoObjectId = videoId ? new mongoose.Types.ObjectId(videoId) : null;
     const postObjectId = postId ? new mongoose.Types.ObjectId(postId) : null;
     const toUserObjectId = toUserId ? new mongoose.Types.ObjectId(toUserId) : null;
+    const storyObjectId = storyId ? new mongoose.Types.ObjectId(storyId) : null;
+    const reportType = resolveReportType(type);
 
-    const [user, video, post, toUser, existingReport] = await Promise.all([
+    const [user, video, post, toUser, story, existingReport] = await Promise.all([
       User.findOne({ _id: userObjectId }).select("_id isBlock fcmToken name").lean(),
       videoObjectId ? Video.findOne({ _id: videoObjectId }).lean() : null,
       postObjectId ? Post.findOne({ _id: postObjectId }).lean() : null,
       toUserObjectId ? User.findOne({ _id: toUserObjectId }).select("_id isBlock").lean() : null,
+      storyObjectId ? Story.findOne({ _id: storyObjectId }).lean() : null,
       Report.findOne({
         ...(videoId && { videoId: videoObjectId, userId: userObjectId, type: 1 }),
         ...(postId && { postId: postObjectId, userId: userObjectId, type: 2 }),
         ...(toUserId && { fromUserId: userObjectId, toUserId: toUserObjectId, type: 3 }),
+        ...(storyId && { storyId: storyObjectId, userId: userObjectId, type: 4 }),
       }).lean(),
     ]);
 
@@ -51,6 +63,13 @@ exports.reportByUser = async (req, res) => {
       if (!post) return res.status(200).json({ status: false, message: "Post not found." });
       if (post.userId.toString() === user._id.toString()) {
         return res.status(200).json({ status: false, message: "You cannot report your own post." });
+      }
+    }
+
+    if (storyId) {
+      if (!story) return res.status(200).json({ status: false, message: "Story not found." });
+      if (story.user && story.user.toString() === user._id.toString()) {
+        return res.status(200).json({ status: false, message: "You cannot report your own story." });
       }
     }
 
@@ -78,9 +97,10 @@ exports.reportByUser = async (req, res) => {
       userId: user._id,
       videoId: videoObjectId || null,
       postId: postObjectId || null,
-      toUserId: toUserObjectId || null,
+      storyId: storyObjectId || null,
+      toUserId: toUserObjectId || (story?.user ?? null),
       reportReason: reportReason.trim(),
-      type: type === "video" ? 1 : type === "post" ? 2 : 3,
+      type: reportType,
     });
     await newReport.save();
 
@@ -120,11 +140,11 @@ exports.getReportReason = async (req, res) => {
 
     return res.status(200).json({
       status: true,
-      message: "Retrive reportReason Successfully",
-      data: reportReason,
+      message: "Report reason get successfully.",
+      reportReason,
     });
-  } catch {
+  } catch (error) {
     console.error(error);
-    return res.status(500).json({ status: false, error: error.message || "Internal Server error" });
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
   }
 };
