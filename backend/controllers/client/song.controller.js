@@ -7,6 +7,37 @@ const SongFavorite = require("../../models/songFavorite.model");
 //mongoose
 const mongoose = require("mongoose");
 
+function normalizeSongTime(value) {
+  if (value == null || value === "") return 0;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) {
+      return Math.max(0, parseInt(trimmed, 10));
+    }
+    const digits = trimmed.replace(/[^\d]/g, "");
+    if (digits) {
+      const parsed = parseInt(digits, 10);
+      if (!Number.isNaN(parsed)) return Math.max(0, parsed);
+    }
+  }
+  return 0;
+}
+
+function sanitizeSong(doc) {
+  if (!doc || typeof doc !== "object") return doc;
+  return {
+    ...doc,
+    songTime: normalizeSongTime(doc.songTime),
+  };
+}
+
+function sanitizeSongs(list) {
+  return Array.isArray(list) ? list.map(sanitizeSong) : [];
+}
+
 //song favorite by the particular user
 exports.favoriteSongByUser = async (req, res) => {
   try {
@@ -135,7 +166,7 @@ exports.getSongsByUser = async (req, res, next) => {
       return res.status(200).json({ status: false, message: "you are blocked by the admin." });
     }
 
-    return res.status(200).json({ status: true, message: "Retrieve the list of songs.", songs: songs });
+    return res.status(200).json({ status: true, message: "Retrieve the list of songs.", songs: sanitizeSongs(songs) });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
@@ -171,7 +202,14 @@ exports.getFavoriteSongs = async (req, res, next) => {
       return res.status(200).json({ status: false, message: "you are blocked by the admin." });
     }
 
-    return res.status(200).json({ status: true, message: "Retrieve all songs that the user has favorited.", songs: songs });
+    return res.status(200).json({
+      status: true,
+      message: "Retrieve all songs that the user has favorited.",
+      songs: songs.map((entry) => ({
+        ...entry,
+        songId: entry.songId ? sanitizeSong(entry.songId) : entry.songId,
+      })),
+    });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
@@ -249,7 +287,7 @@ exports.searchSongs = async (req, res) => {
       return res.status(200).json({ status: false, message: "you are blocked by the admin." });
     }
 
-    return res.status(200).json({ status: true, message: "Success", searchData: response });
+    return res.status(200).json({ status: true, message: "Success", searchData: sanitizeSongs(response) });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
