@@ -20,6 +20,7 @@ const postSchema = new mongoose.Schema(
 
     hashTagId: [{ type: mongoose.Schema.Types.ObjectId, ref: "HashTag", default: [] }],
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    songId: { type: mongoose.Schema.Types.ObjectId, ref: "Song", default: null },
 
     shareCount: { type: Number, default: 0 }, //when user share the post then shareCount increased
     isFake: { type: Boolean, default: false },
@@ -34,6 +35,7 @@ const postSchema = new mongoose.Schema(
 
 postSchema.index({ userId: 1 });
 postSchema.index({ hashTagId: 1 });
+postSchema.index({ songId: 1 });
 postSchema.index({ isFake: 1 });
 postSchema.index({ createdAt: -1 });
 

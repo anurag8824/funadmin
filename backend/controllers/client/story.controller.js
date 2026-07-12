@@ -1043,3 +1043,94 @@ exports.getOwnStories = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
   }
 };
+
+// Active (non-expired) stories that use a particular song
+exports.fetchStoriesOfParticularSong = async (req, res) => {
+  try {
+    if (!req.query.userId || !req.query.songId) {
+      return res.status(200).json({ status: false, message: "Oops ! Invalid details." });
+    }
+
+    const userId = new mongoose.Types.ObjectId(req.query.userId);
+    const songId = new mongoose.Types.ObjectId(req.query.songId);
+    const start = req.query.start ? parseInt(req.query.start) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit) : 20;
+    const now = new Date();
+
+    const [user, song, totalStoriesOfSong, stories] = await Promise.all([
+      User.findOne({ _id: userId }).lean(),
+      Song.findOne({ _id: songId }).lean(),
+      Story.countDocuments({ backgroundSong: songId, expiresAt: { $gt: now } }),
+      Story.aggregate([
+        {
+          $match: {
+            backgroundSong: songId,
+            expiresAt: { $gt: now },
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "user",
+          },
+        },
+        { $unwind: { path: "$user", preserveNullAndEmptyArrays: false } },
+        {
+          $lookup: {
+            from: "songs",
+            localField: "backgroundSong",
+            foreignField: "_id",
+            as: "backgroundSong",
+          },
+        },
+        { $unwind: { path: "$backgroundSong", preserveNullAndEmptyArrays: false } },
+        {
+          $project: {
+            mediaImageUrl: 1,
+            mediaVideoUrl: 1,
+            storyType: 1,
+            createdAt: 1,
+            expiresAt: 1,
+            backgroundSong: {
+              _id: "$backgroundSong._id",
+              songTitle: "$backgroundSong.songTitle",
+              songImage: "$backgroundSong.songImage",
+              singerName: "$backgroundSong.singerName",
+              songTime: "$backgroundSong.songTime",
+              songLink: "$backgroundSong.songLink",
+            },
+            userId: "$user._id",
+            name: "$user.name",
+            userName: "$user.userName",
+            userImage: "$user.image",
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: (start - 1) * limit },
+        { $limit: limit },
+      ]),
+    ]);
+
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "You are blocked by the admin." });
+    }
+    if (!song) {
+      return res.status(200).json({ status: false, message: "Song does not found." });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Retrieve stories with the use of that song.",
+      totalStoriesOfSong: totalStoriesOfSong,
+      stories: stories,
+    });
+  } catch (error) {
+    console.error("Error fetching stories of song:", error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};

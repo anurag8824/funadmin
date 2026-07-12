@@ -40,4 +40,7 @@ route.get("/retrieveAllPosts", checkAccessWithSecretKey(), PostController.retrie
 //get a single post by ID (used for deep-link share)
 route.get("/getPostById/:postId", checkAccessWithSecretKey(), PostController.getPostById);
 
+// get posts using a particular song
+route.get("/fetchPostsOfParticularSong", checkAccessWithSecretKey(), PostController.fetchPostsOfParticularSong);
+
 module.exports = route;

@@ -12,6 +12,7 @@ const Report = require("../../models/report.model");
 const PostOrVideoComment = require("../../models/postOrvideoComment.model");
 const LikeHistoryOfpostOrvideoComment = require("../../models/likeHistoryOfpostOrvideoComment.model");
 const Notification = require("../../models/notification.model");
+const Song = require("../../models/song.model");
 
 //axios
 const axios = require("axios");
@@ -122,6 +123,22 @@ exports.uploadPost = async (req, res, next) => {
     post.uniquePostId = uniquePostId;
     post.userId = user._id;
     post.caption = req?.body?.caption || "";
+
+    if (req?.body?.songId) {
+      const song = await Song.findById(req.body.songId).select("_id").lean();
+      if (!song) {
+        if (req?.body?.postImage && Array.isArray(req.body.postImage)) {
+          const imageUrls = req.body.postImage;
+          if (imageUrls.length > 0) {
+            await deleteFromStorage(imageUrls).catch((err) => {
+              console.log("Error deleting images from storage:", err);
+            });
+          }
+        }
+        return res.status(200).json({ status: false, message: "Song does not found." });
+      }
+      post.songId = song._id;
+    }
 
     if (req?.body?.hashTagId) {
       const multipleHashTag = req?.body?.hashTagId.toString().split(",");
@@ -469,6 +486,20 @@ exports.getAllPosts = async (req, res) => {
         },
         {
           $lookup: {
+            from: "songs",
+            localField: "songId",
+            foreignField: "_id",
+            as: "song",
+          },
+        },
+        {
+          $unwind: {
+            path: "$song",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
             from: "likehistoryofpostorvideos",
             localField: "_id",
             foreignField: "postId",
@@ -520,6 +551,11 @@ exports.getAllPosts = async (req, res) => {
             caption: 1,
             postImage: 1,
             shareCount: 1,
+            songId: 1,
+            songTitle: "$song.songTitle",
+            songImage: "$song.songImage",
+            songLink: "$song.songLink",
+            singerName: "$song.singerName",
             isFake: 1,
             createdAt: 1,
             userId: "$user._id",
@@ -787,6 +823,20 @@ exports.getAllPosts = async (req, res) => {
         },
         {
           $lookup: {
+            from: "songs",
+            localField: "songId",
+            foreignField: "_id",
+            as: "song",
+          },
+        },
+        {
+          $unwind: {
+            path: "$song",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
             from: "likehistoryofpostorvideos",
             localField: "_id",
             foreignField: "postId",
@@ -838,6 +888,11 @@ exports.getAllPosts = async (req, res) => {
             caption: 1,
             postImage: 1,
             shareCount: 1,
+            songId: 1,
+            songTitle: "$song.songTitle",
+            songImage: "$song.songImage",
+            songLink: "$song.songLink",
+            singerName: "$song.singerName",
             isFake: 1,
             createdAt: 1,
             userId: "$user._id",
@@ -1513,6 +1568,20 @@ exports.retrieveAllPosts = async (req, res, next) => {
         },
         {
           $lookup: {
+            from: "songs",
+            localField: "songId",
+            foreignField: "_id",
+            as: "song",
+          },
+        },
+        {
+          $unwind: {
+            path: "$song",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
             from: "likehistoryofpostorvideos",
             localField: "_id",
             foreignField: "postId",
@@ -1564,6 +1633,11 @@ exports.retrieveAllPosts = async (req, res, next) => {
             caption: 1,
             postImage: 1,
             shareCount: 1,
+            songId: 1,
+            songTitle: "$song.songTitle",
+            songImage: "$song.songImage",
+            songLink: "$song.songLink",
+            singerName: "$song.singerName",
             isFake: 1,
             createdAt: 1,
             userId: "$user._id",
@@ -1795,6 +1869,20 @@ exports.retrieveAllPosts = async (req, res, next) => {
         },
         {
           $lookup: {
+            from: "songs",
+            localField: "songId",
+            foreignField: "_id",
+            as: "song",
+          },
+        },
+        {
+          $unwind: {
+            path: "$song",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
             from: "likehistoryofpostorvideos",
             localField: "_id",
             foreignField: "postId",
@@ -2012,11 +2100,27 @@ exports.getPostById = async (req, res) => {
       return res.status(200).json({ status: false, message: "Post owner not found." });
     }
 
+    let songFields = {};
+    if (post.songId) {
+      const song = await Song.findById(post.songId)
+        .select("songTitle songImage songLink singerName")
+        .lean();
+      if (song) {
+        songFields = {
+          songTitle: song.songTitle,
+          songImage: song.songImage,
+          songLink: song.songLink,
+          singerName: song.singerName,
+        };
+      }
+    }
+
     return res.status(200).json({
       status: true,
       message: "Post retrieved successfully.",
       data: {
         ...post,
+        ...songFields,
         name: user.name,
         userName: user.userName,
         userImage: user.image,
@@ -2026,5 +2130,143 @@ exports.getPostById = async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};
+
+// get posts that use a particular song
+exports.fetchPostsOfParticularSong = async (req, res) => {
+  try {
+    if (!req.query.userId || !req.query.songId) {
+      return res.status(200).json({ status: false, message: "Oops ! Invalid details." });
+    }
+
+    const userId = new mongoose.Types.ObjectId(req.query.userId);
+    const songId = new mongoose.Types.ObjectId(req.query.songId);
+    const start = req.query.start ? parseInt(req.query.start) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit) : 20;
+
+    const [user, song, totalPostsOfSong, posts] = await Promise.all([
+      User.findOne({ _id: userId }).lean(),
+      Song.findOne({ _id: songId }).lean(),
+      Post.countDocuments({ songId: songId }),
+      Post.aggregate([
+        { $match: { songId: songId } },
+        {
+          $addFields: {
+            postImage: {
+              $filter: {
+                input: "$postImage",
+                as: "image",
+                cond: { $eq: ["$$image.isBanned", false] },
+              },
+            },
+          },
+        },
+        { $match: { postImage: { $ne: [] } } },
+        {
+          $lookup: {
+            from: "users",
+            localField: "userId",
+            foreignField: "_id",
+            as: "user",
+          },
+        },
+        { $unwind: { path: "$user", preserveNullAndEmptyArrays: false } },
+        {
+          $lookup: {
+            from: "songs",
+            localField: "songId",
+            foreignField: "_id",
+            as: "song",
+          },
+        },
+        { $unwind: { path: "$song", preserveNullAndEmptyArrays: false } },
+        {
+          $lookup: {
+            from: "likehistoryofpostorvideos",
+            let: { postId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [{ $eq: ["$postId", "$$postId"] }, { $eq: ["$userId", userId] }],
+                  },
+                },
+              },
+            ],
+            as: "likes",
+          },
+        },
+        {
+          $lookup: {
+            from: "likehistoryofpostorvideos",
+            localField: "_id",
+            foreignField: "postId",
+            as: "totalLikes",
+          },
+        },
+        {
+          $lookup: {
+            from: "postorvideocomments",
+            localField: "_id",
+            foreignField: "postId",
+            as: "comments",
+          },
+        },
+        {
+          $addFields: {
+            isLike: { $cond: { if: { $gt: [{ $size: "$likes" }, 0] }, then: true, else: false } },
+            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
+            totalLikes: { $size: "$totalLikes" },
+            totalComments: { $size: "$comments" },
+          },
+        },
+        {
+          $project: {
+            caption: 1,
+            postImage: 1,
+            shareCount: 1,
+            createdAt: 1,
+            songId: 1,
+            songTitle: "$song.songTitle",
+            songImage: "$song.songImage",
+            songLink: "$song.songLink",
+            singerName: "$song.singerName",
+            isLike: 1,
+            isSaved: 1,
+            totalLikes: 1,
+            totalComments: 1,
+            userId: "$user._id",
+            name: "$user.name",
+            userName: "$user.userName",
+            userImage: "$user.image",
+            isVerified: "$user.isVerified",
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: (start - 1) * limit },
+        { $limit: limit },
+      ]),
+    ]);
+
+    if (!user) {
+      return res.status(200).json({ status: false, message: "User not found." });
+    }
+    if (user.isBlock) {
+      return res.status(200).json({ status: false, message: "You are blocked by the admin." });
+    }
+    if (!song) {
+      return res.status(200).json({ status: false, message: "Song does not found." });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Retrieve posts with the use of that song.",
+      totalPostsOfSong: totalPostsOfSong,
+      posts: posts,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
   }
 };
