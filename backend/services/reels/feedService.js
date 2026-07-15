@@ -50,28 +50,6 @@ function buildFeedAggregation({ baseMatch, limit, start, requestedVideoId, curso
     {
       $lookup: {
         from: "likehistoryofpostorvideos",
-        let: { videoId: "$_id" },
-        pipeline: [
-          { $match: { $expr: { $eq: ["$videoId", "$$videoId"] } } },
-          { $count: "count" },
-        ],
-        as: "totalLikesAgg",
-      },
-    },
-    {
-      $lookup: {
-        from: "postorvideocomments",
-        let: { videoId: "$_id" },
-        pipeline: [
-          { $match: { $expr: { $eq: ["$videoId", "$$videoId"] } } },
-          { $count: "count" },
-        ],
-        as: "totalCommentsAgg",
-      },
-    },
-    {
-      $lookup: {
-        from: "likehistoryofpostorvideos",
         let: { videoId: "$_id", userId: viewerUserId },
         pipeline: [
           {
@@ -108,9 +86,17 @@ function buildFeedAggregation({ baseMatch, limit, start, requestedVideoId, curso
         caption: 1,
         videoImage: 1,
         videoUrl: 1,
-        assets: 1,
+        assets: {
+          hlsMasterUrl: { $ifNull: ["$assets.hlsMasterUrl", ""] },
+          hlsVariants: {
+            hls720Url: { $ifNull: ["$assets.hlsVariants.hls720Url", ""] },
+            hls480Url: { $ifNull: ["$assets.hlsVariants.hls480Url", ""] },
+          },
+          mp4_720_url: { $ifNull: ["$assets.mp4_720_url", ""] },
+          mp4_480_url: { $ifNull: ["$assets.mp4_480_url", ""] },
+          thumbUrl: { $ifNull: ["$assets.thumbUrl", ""] },
+        },
         processingStatus: 1,
-        processingError: 1,
         videoTime: 1,
         createdAt: 1,
         userId: "$user._id",
@@ -128,12 +114,9 @@ function buildFeedAggregation({ baseMatch, limit, start, requestedVideoId, curso
         isLike: { $gt: [{ $size: "$likeHistory" }, 0] },
         isFollow: { $gt: [{ $size: "$isFollowAgg" }, 0] },
         isSaved: { $in: [viewerUserId, { $ifNull: ["$savedBy", []] }] },
-        totalLikes: {
-          $ifNull: [{ $arrayElemAt: ["$totalLikesAgg.count", 0] }, 0],
-        },
-        totalComments: {
-          $ifNull: [{ $arrayElemAt: ["$totalCommentsAgg.count", 0] }, 0],
-        },
+        // Denormalized counters — avoids per-row $count lookups on likes/comments.
+        totalLikes: { $ifNull: ["$likeCount", 0] },
+        totalComments: { $ifNull: ["$commentCount", 0] },
         totalShares: "$shareCount",
       },
     },

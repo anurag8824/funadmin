@@ -20,6 +20,8 @@ const videoSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
     shareCount: { type: Number, default: 0 }, //when user share the video then shareCount increased
+    likeCount: { type: Number, default: 0, min: 0 },
+    commentCount: { type: Number, default: 0, min: 0 },
     isFake: { type: Boolean, default: false },
     isBanned: { type: Boolean, default: false },
     processingStatus: {
@@ -63,8 +65,10 @@ videoSchema.index({ songId: 1 });
 videoSchema.index({ isFake: 1 });
 videoSchema.index({ isBanned: 1 });
 videoSchema.index({ createdAt: -1 });
+videoSchema.index({ createdAt: -1, _id: -1 }); // cursor pagination for reels feed
 videoSchema.index({ isBanned: 1, isFake: 1, createdAt: -1 });
 videoSchema.index({ isBanned: 1, isDraft: 1, createdAt: -1 });
+videoSchema.index({ isBanned: 1, isFake: 1, isDraft: 1, createdAt: -1, _id: -1 });
 videoSchema.index({ processingStatus: 1, createdAt: -1 });
 videoSchema.index({ userId: 1, createdAt: -1 });
 

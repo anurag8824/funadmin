@@ -698,253 +698,24 @@ exports.getAllVideos = async (req, res, next) => {
     }
 
     if (req.query.videoId) {
-      const videoId = new mongoose.Types.ObjectId(req.query.videoId);
-
-      const [user, video] = await Promise.all([User.findOne({ _id: userId }), Video.findById(videoId)]);
-
-      if (!video) {
-        return res.status(200).json({ status: false, message: "No video found with the provided ID." });
+      // Never materialize/shuffle the full catalog — delegate to cursor-safe lite feed.
+      const result = await fetchReelsFeedLite({
+        userId: req.query.userId,
+        limit: req.query.limit || 20,
+        start: req.query.start || 1,
+        videoId: req.query.videoId,
+        settingJSON,
+        useCache: false,
+      });
+      if (!result.ok) {
+        return res.status(result.status).json(result.body);
       }
-
-      if (!user) {
-        return res.status(200).json({ status: false, message: "User does not found." });
-      }
-
-      if (user.isBlock) {
-        return res.status(200).json({ status: false, message: "you are blocked by the admin." });
-      }
-
-      const blockedByUserIds = (user.blockedUsers || []).map((id) => String(id));
-      const blockedUserByOthers = await User.find({ blockedUsers: user._id }).select("_id").lean();
-      const blockedByOthersIds = blockedUserByOthers.map((u) => String(u._id));
-      const excludedFeedUserIds = [...new Set([...blockedByUserIds, ...blockedByOthersIds])].map((id) => toObjectId(id));
-
-      const data = [
-        {
-          $match: {
-            isBanned: false,
-            ...(excludedFeedUserIds.length ? { userId: { $nin: excludedFeedUserIds } } : {}),
-          },
-        },
-        {
-          $lookup: {
-            from: "songs",
-            localField: "songId",
-            foreignField: "_id",
-            as: "song",
-          },
-        },
-        {
-          $unwind: {
-            path: "$song",
-            preserveNullAndEmptyArrays: true, //to include documents with empty 'song' array (when songId is null)
-          },
-        },
-        {
-          $lookup: {
-            from: "hashtags",
-            localField: "hashTagId",
-            foreignField: "_id",
-            as: "hashTag",
-          },
-        },
-        {
-          $lookup: {
-            from: "users",
-            localField: "userId",
-            foreignField: "_id",
-            as: "user",
-          },
-        },
-        {
-          $unwind: {
-            path: "$user",
-            preserveNullAndEmptyArrays: false,
-          },
-        },
-        {
-          $lookup: {
-            from: "postorvideocomments",
-            localField: "_id",
-            foreignField: "videoId",
-            as: "totalComments",
-          },
-        },
-        {
-          $lookup: {
-            from: "likehistoryofpostorvideos",
-            localField: "_id",
-            foreignField: "videoId",
-            as: "totalLikes",
-          },
-        },
-        {
-          $lookup: {
-            from: "likehistoryofpostorvideos",
-            let: { videoId: "$_id", userId: user._id },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [{ $eq: ["$videoId", "$$videoId"] }, { $eq: ["$userId", "$$userId"] }],
-                  },
-                },
-              },
-            ],
-            as: "likeHistory",
-          },
-        },
-        {
-          $lookup: {
-            from: "followerfollowings",
-            let: { postUserId: "$userId", requestingUserId: user._id },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [{ $eq: ["$toUserId", "$$postUserId"] }, { $eq: ["$fromUserId", "$$requestingUserId"] }],
-                  },
-                },
-              },
-            ],
-            as: "isFollow",
-          },
-        },
-        {
-          $project: {
-            caption: 1,
-            videoImage: 1,
-            videoUrl: 1,
-            assets: 1,
-            processingStatus: 1,
-            processingError: 1,
-            shareCount: 1,
-            isFake: 1,
-            songId: 1,
-            createdAt: 1,
-
-            songTitle: "$song.songTitle",
-            songImage: "$song.songImage",
-            songLink: "$song.songLink",
-            singerName: "$song.singerName",
-
-            hashTag: "$hashTag.hashTag",
-
-            userIsFake: "$user.isFake",
-            isProfileImageBanned: "$user.isProfileImageBanned",
-            userId: "$user._id",
-            name: "$user.name",
-            userName: "$user.userName",
-            userImage: "$user.image",
-            isVerified: "$user.isVerified",
-            isLike: { $cond: { if: { $gt: [{ $size: "$likeHistory" }, 0] }, then: true, else: false } },
-            isFollow: { $cond: { if: { $gt: [{ $size: "$isFollow" }, 0] }, then: true, else: false } },
-            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
-            totalLikes: { $size: "$totalLikes" },
-            totalComments: { $size: "$totalComments" },
-            time: {
-              $let: {
-                vars: {
-                  timeDiff: { $subtract: [now.toDate(), "$createdAt"] },
-                },
-                in: {
-                  $concat: [
-                    {
-                      $switch: {
-                        branches: [
-                          {
-                            case: { $gte: ["$$timeDiff", 31536000000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 31536000000] } } }, " years ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 2592000000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 2592000000] } } }, " months ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 604800000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 604800000] } } }, " weeks ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 86400000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 86400000] } } }, " days ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 3600000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 3600000] } } }, " hours ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 60000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 60000] } } }, " minutes ago"] },
-                          },
-                          {
-                            case: { $gte: ["$$timeDiff", 1000] },
-                            then: { $concat: [{ $toString: { $floor: { $divide: ["$$timeDiff", 1000] } } }, " seconds ago"] },
-                          },
-                          { case: true, then: "Just now" },
-                        ],
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      ];
-
-      if (settingJSON.isFakeData) {
-        const [realVideoOfUser, fakeVideoOfUser] = await Promise.all([Video.aggregate([{ $match: { isFake: false } }, ...data]), Video.aggregate([{ $match: { isFake: true } }, ...data])]);
-
-        let allVideos = [...realVideoOfUser, ...fakeVideoOfUser];
-
-        //Sort allVideos by createdAt date
-        //allVideos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        allVideos = allVideos.sort(() => 0.5 - Math.random());
-
-        const videoIndex = allVideos.findIndex((short) => short._id.toString() === videoId.toString());
-
-        //If the videoId is found, move it to the 0th index
-        if (videoIndex !== -1) {
-          const [movedVideo] = allVideos.splice(videoIndex, 1);
-          allVideos.unshift(movedVideo);
-        }
-
-        const adjustedStart = videoIndex !== -1 ? 1 : start;
-
-        allVideos = allVideos.slice(adjustedStart - 1, adjustedStart - 1 + limit);
-
-        return res.status(200).json({
-          status: true,
-          message: "Retrieve the videos uploaded by users.",
-          data: allVideos,
-        });
-      } else {
-        let realVideoOfUser = await Video.aggregate([{ $match: { isFake: false } }, ...data]);
-
-        //Sort videos by createdAt date
-        //realVideoOfUser.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        realVideoOfUser = realVideoOfUser.sort(() => 0.5 - Math.random());
-
-        const videoIndex = realVideoOfUser.findIndex((short) => short._id.toString() === videoId.toString());
-
-        //If the videoId is found, move it to the 0th index
-        if (videoIndex !== -1) {
-          const [movedVideo] = realVideoOfUser.splice(videoIndex, 1);
-          realVideoOfUser.unshift(movedVideo);
-        }
-
-        const adjustedStart = videoIndex !== -1 ? 1 : start;
-
-        realVideoOfUser = realVideoOfUser.slice(adjustedStart - 1, adjustedStart - 1 + limit);
-
-        return res.status(200).json({
-          status: true,
-          message: "Retrieve the videos uploaded by users.",
-          data: realVideoOfUser,
-        });
-      }
+      return res.status(200).json({
+        status: true,
+        message: "Retrieve the videos uploaded by users.",
+        data: result.body?.data || [],
+        paging: result.body?.paging,
+      });
     } else {
       const userId = new mongoose.Types.ObjectId(req.query.userId);
 
@@ -1263,10 +1034,15 @@ exports.likeOrDislikeOfVideo = async (req, res) => {
     }
 
     if (alreadylikedVideo) {
-      await LikeHistoryOfPostOrVideo.deleteOne({
-        userId: user._id,
-        videoId: video._id,
-      });
+      await Promise.all([
+        LikeHistoryOfPostOrVideo.deleteOne({
+          userId: user._id,
+          videoId: video._id,
+        }),
+        Video.updateOne({ _id: video._id }, { $inc: { likeCount: -1 } }),
+      ]);
+      // Clamp floor at 0 for legacy docs without counters.
+      await Video.updateOne({ _id: video._id, likeCount: { $lt: 0 } }, { $set: { likeCount: 0 } });
 
       return res.status(200).json({
         status: true,
@@ -1281,7 +1057,10 @@ exports.likeOrDislikeOfVideo = async (req, res) => {
       likeHistory.userId = user._id;
       likeHistory.videoId = video._id;
       likeHistory.uploaderId = video.userId;
-      await likeHistory.save();
+      await Promise.all([
+        likeHistory.save(),
+        Video.updateOne({ _id: video._id }, { $inc: { likeCount: 1 } }),
+      ]);
 
       res.status(200).json({
         status: true,

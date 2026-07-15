@@ -129,6 +129,8 @@ exports.commentOfPostOrVideo = async (req, res) => {
         return res.status(200).json({ status: false, message: "video does not found." });
       }
 
+      await Video.updateOne({ _id: videoId }, { $inc: { commentCount: 1 } });
+
       res.status(200).json({ status: true, message: "Comment passed on video by that user.", postOrVideoComment: postOrVideoComment });
 
       const videoUser = await User.findOne({ _id: video.userId }).lean();
@@ -551,6 +553,10 @@ exports.deleteComment = async (req, res) => {
     }
 
     await PostOrVideoComment.deleteOne({ _id: commentId });
+    if (comment.videoId) {
+      await Video.updateOne({ _id: comment.videoId }, { $inc: { commentCount: -1 } });
+      await Video.updateOne({ _id: comment.videoId, commentCount: { $lt: 0 } }, { $set: { commentCount: 0 } });
+    }
     return res.status(200).json({ status: true, message: "Comment deleted." });
   } catch (error) {
     console.log(error);

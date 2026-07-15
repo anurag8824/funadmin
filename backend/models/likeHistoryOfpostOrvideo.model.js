@@ -15,6 +15,7 @@ const likeHistoryOfpostOrvideoSchema = new mongoose.Schema(
 
 likeHistoryOfpostOrvideoSchema.index({ userId: 1 });
 likeHistoryOfpostOrvideoSchema.index({ videoId: 1 });
+likeHistoryOfpostOrvideoSchema.index({ videoId: 1, userId: 1 });
 likeHistoryOfpostOrvideoSchema.index({ postId: 1 });
 likeHistoryOfpostOrvideoSchema.index({ createdAt: -1 });
 
