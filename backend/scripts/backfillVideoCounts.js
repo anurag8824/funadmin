@@ -4,15 +4,19 @@
  * Usage (from funadmin-main/backend):
  *   node scripts/backfillVideoCounts.js
  *
- * Requires MONGO_URI (or MONGODB_URI) in env / .env.
+ * Loads `.env` and uses MongoDb_Connection_String (same as the API).
  */
 require("dotenv").config();
 const mongoose = require("mongoose");
 
 async function main() {
-  const uri = process.env.MONGO_URI || process.env.MONGODB_URI || process.env.DB;
+  const uri =
+    process.env.MongoDb_Connection_String ||
+    process.env.MONGO_URI ||
+    process.env.MONGODB_URI ||
+    process.env.DB;
   if (!uri) {
-    console.error("Missing MONGO_URI / MONGODB_URI");
+    console.error("Missing MongoDb_Connection_String (check backend/.env)");
     process.exit(1);
   }
 
