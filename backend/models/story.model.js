@@ -14,6 +14,13 @@ const storySchema = new mongoose.Schema(
     viewsCount: { type: Number, default: 0 },
     reactionsCount: { type: Number, default: 0 },
     isFake: { type: Boolean, default: false },
+    // Shared post/reel sticker metadata (Add to Story)
+    sharedContentKind: { type: String, default: null }, // "post" | "reel"
+    sharedContentId: { type: String, default: null },
+    sharedContentPreviewUrl: { type: String, default: "" },
+    sharedContentAuthorName: { type: String, default: "" },
+    sharedContentAuthorImage: { type: String, default: "" },
+    sharedContentCaption: { type: String, default: "" },
     // TTL field: set explicitly on upload; MongoDB removes the document after this date.
     // Default ensures even admin-created stories without explicit expiresAt also expire.
     expiresAt: {
