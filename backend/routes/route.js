@@ -72,4 +72,10 @@ route.get("/health/reels/metrics", (req, res) => {
 route.use("/admin", admin);
 route.use("/client", client);
 
+// Public share landing pages (OG previews + Play Store fallback) + assetlinks
+const share = safeRequire("share", () => require("./share.route"));
+if (share) {
+  route.use(share);
+}
+
 module.exports = route;

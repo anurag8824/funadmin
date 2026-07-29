@@ -86,6 +86,9 @@ interface SettingData {
   firebaseKeyText?: string;
   sightengineUser?: string;
   sightengineSecret?: string;
+  androidMinVersionCode?: number;
+  forceUpdateAndroid?: boolean;
+  androidAppUrl?: string;
 }
 type ThemeType = "dark" | "light";
 
@@ -99,6 +102,11 @@ const AppSetting = () => {
   const [zegoAppSignIn, setZegoAppSignIn] = useState<string>();
   const [coinCharge, setCoinCharge] = useState<number>();
   const [durationOfShorts, setDurationOfShorts] = useState<number>();
+  const [androidMinVersionCode, setAndroidMinVersionCode] = useState<number>(0);
+  const [forceUpdateAndroid, setForceUpdateAndroid] = useState<boolean>(false);
+  const [androidAppUrl, setAndroidAppUrl] = useState<string>(
+    "https://play.google.com/store/apps/details?id=com.infayou.funtapp",
+  );
   const [stripePublishableKey, setStripePublishableKey] = useState<string>();
   const [currencySymbol, setCurrencySymbol] = useState<string>("");
   const [stripeSecretKey, setStripeSecretKey] = useState<string>();
@@ -195,6 +203,12 @@ const AppSetting = () => {
     setIsFakeData(settingData?.isFakeData);
     setIsEffectActive(settingData?.isEffectActive);
     setDurationOfShorts(settingData?.durationOfShorts);
+    setAndroidMinVersionCode(settingData?.androidMinVersionCode ?? 0);
+    setForceUpdateAndroid(!!settingData?.forceUpdateAndroid);
+    setAndroidAppUrl(
+      settingData?.androidAppUrl ||
+        "https://play.google.com/store/apps/details?id=com.infayou.funtapp",
+    );
     setCoinCharge(settingData?.coinCharge);
     setCurrencySymbol(settingData?.currency?.symbol);
     setMinCoinForCashOut(settingData?.minCoinForCashOut);
@@ -238,6 +252,9 @@ const AppSetting = () => {
       zegoAppSignIn: zegoAppSignIn,
       coinCharge: coinCharge,
       durationOfShorts: durationOfShorts,
+      androidMinVersionCode: androidMinVersionCode,
+      forceUpdateAndroid: forceUpdateAndroid,
+      androidAppUrl: androidAppUrl,
       razorPayId: razorPayId,
       razorSecretKey: razorSecretKey,
       stripeSecretKey: stripeSecretKey,
@@ -918,6 +935,46 @@ const AppSetting = () => {
                         onChange={(e) => {
                           setDurationOfShorts(e.target.value);
                         }}
+                      />
+                    </div>
+                  </div>
+
+                  <h6 className="mt-4">Android Force Update</h6>
+
+                  <div className="row payment-setting p-0">
+                    <div className="col-12 withdrawal-input">
+                      <Input
+                        label={"Min Android versionCode"}
+                        name={"androidMinVersionCode"}
+                        type={"number"}
+                        value={androidMinVersionCode}
+                        placeholder={"e.g. 33"}
+                        onChange={(e) => {
+                          setAndroidMinVersionCode(e.target.value);
+                        }}
+                      />
+                    </div>
+                    <div className="col-12 withdrawal-input mt-2">
+                      <Input
+                        label={"Play Store URL"}
+                        name={"androidAppUrl"}
+                        type={"text"}
+                        value={androidAppUrl}
+                        placeholder={"Play Store URL"}
+                        onChange={(e) => {
+                          setAndroidAppUrl(e.target.value);
+                        }}
+                      />
+                    </div>
+                    <div className="col-12 mt-2">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={forceUpdateAndroid === true}
+                            onChange={() => setForceUpdateAndroid(!forceUpdateAndroid)}
+                          />
+                        }
+                        label="Force update Android (compulsory popup)"
                       />
                     </div>
                   </div>

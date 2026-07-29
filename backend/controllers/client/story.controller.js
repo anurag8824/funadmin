@@ -1158,3 +1158,71 @@ exports.fetchStoriesOfParticularSong = async (req, res) => {
     return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
   }
 };
+
+// GET /client/story/getStoryById/:storyId — deep-link open
+exports.getStoryById = async (req, res) => {
+  try {
+    const { storyId } = req.params;
+    const userId = req.query.userId;
+
+    if (!storyId || !mongoose.Types.ObjectId.isValid(storyId)) {
+      return res.status(200).json({ status: false, message: "Valid storyId is required." });
+    }
+
+    const story = await Story.findById(storyId)
+      .populate("user", "_id name userName image isFake isProfileImageBanned")
+      .populate("backgroundSong", "_id songTitle songImage singerName songTime songLink")
+      .lean();
+
+    if (!story || !story.user) {
+      return res.status(200).json({ status: false, message: "Story not found." });
+    }
+
+    let isView = false;
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      const viewed = await StoryView.findOne({
+        userId: new mongoose.Types.ObjectId(userId),
+        storyId: new mongoose.Types.ObjectId(storyId),
+      }).lean();
+      isView = !!viewed;
+    }
+
+    const storyDto = {
+      _id: story._id,
+      mediaImageUrl: story.mediaImageUrl || "",
+      mediaVideoUrl: story.mediaVideoUrl || "",
+      storyType: story.storyType,
+      duration: story.duration || 0,
+      viewsCount: story.viewsCount || 0,
+      reactionsCount: story.reactionsCount || 0,
+      isView,
+      createdAt: story.createdAt,
+      backgroundSong: story.backgroundSong || null,
+      sharedContentKind: story.sharedContentKind || null,
+      sharedContentId: story.sharedContentId || null,
+      sharedContentPreviewUrl: story.sharedContentPreviewUrl || "",
+      sharedContentAuthorName: story.sharedContentAuthorName || "",
+      sharedContentAuthorImage: story.sharedContentAuthorImage || "",
+      sharedContentCaption: story.sharedContentCaption || "",
+    };
+
+    return res.status(200).json({
+      status: true,
+      message: "Story retrieved successfully.",
+      storyGroup: {
+        user: {
+          _id: story.user._id,
+          name: story.user.name || "",
+          userName: story.user.userName || "",
+          image: story.user.image || "",
+          isFake: !!story.user.isFake,
+          isProfileImageBanned: !!story.user.isProfileImageBanned,
+        },
+        stories: [storyDto],
+      },
+    });
+  } catch (error) {
+    console.error("getStoryById error:", error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+  }
+};

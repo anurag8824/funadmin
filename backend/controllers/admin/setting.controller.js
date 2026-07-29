@@ -75,6 +75,19 @@ exports.updateSetting = async (req, res) => {
     setting.postBanned = req.body.postBanned ? req.body.postBanned.toString().split(",") : setting.postBanned;
 
     setting.adDisplayIndex = req.body.adDisplayIndex ? Number(req.body.adDisplayIndex) : setting.adDisplayIndex;
+    if (req.body.androidMinVersionCode !== undefined && req.body.androidMinVersionCode !== null && req.body.androidMinVersionCode !== "") {
+      setting.androidMinVersionCode = parseInt(req.body.androidMinVersionCode, 10) || 0;
+    }
+    if (req.body.forceUpdateAndroid !== undefined && req.body.forceUpdateAndroid !== null && req.body.forceUpdateAndroid !== "") {
+      setting.forceUpdateAndroid =
+        req.body.forceUpdateAndroid === true ||
+        req.body.forceUpdateAndroid === "true" ||
+        req.body.forceUpdateAndroid === 1 ||
+        req.body.forceUpdateAndroid === "1";
+    }
+    if (req.body.androidAppUrl) {
+      setting.androidAppUrl = req.body.androidAppUrl;
+    }
     setting.android.google.interstitial = req.body.androidGoogleInterstitial ? req.body.androidGoogleInterstitial : setting.android.google.interstitial;
     setting.android.google.native = req.body.androidGoogleNative ? req.body.androidGoogleNative : setting.android.google.native;
     setting.ios.google.interstitial = req.body.iosGoogleInterstitial ? req.body.iosGoogleInterstitial : setting.ios.google.interstitial;

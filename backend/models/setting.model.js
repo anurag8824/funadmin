@@ -4,6 +4,14 @@ const settingSchema = new mongoose.Schema(
   {
     googlePlaySwitch: { type: Boolean, default: false },
 
+    // Force update (Android). Client compares BuildConfig.VERSION_CODE to androidMinVersionCode.
+    androidMinVersionCode: { type: Number, default: 0 },
+    forceUpdateAndroid: { type: Boolean, default: false },
+    androidAppUrl: {
+      type: String,
+      default: "https://play.google.com/store/apps/details?id=com.infayou.funtapp",
+    },
+
     stripeSwitch: { type: Boolean, default: false },
     stripePublishableKey: { type: String, default: "STRIPE PUBLISHABLE KEY" },
     stripeSecretKey: { type: String, default: "STRIPE SECRET KEY" },

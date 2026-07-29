@@ -28,6 +28,9 @@ route.get("/getFollowedUserStories", checkAccessWithSecretKey(), StoryController
 //get own stories
 route.get("/getOwnStories", checkAccessWithSecretKey(), StoryController.getOwnStories);
 
+// get single story by id (deep link)
+route.get("/getStoryById/:storyId", checkAccessWithSecretKey(), StoryController.getStoryById);
+
 // active stories using a particular song
 route.get("/fetchStoriesOfParticularSong", checkAccessWithSecretKey(), StoryController.fetchStoriesOfParticularSong);
 

@@ -58,6 +58,9 @@ module.exports = {
     "1"
   ],
   "googlePlaySwitch": true,
+  "androidMinVersionCode": 0,
+  "forceUpdateAndroid": false,
+  "androidAppUrl": "https://play.google.com/store/apps/details?id=com.infayou.funtapp",
   "androidLicenseKey": "androidLicenseKey",
   "iosLicenseKey": "iosLicenseKey",
   "sightengineSecret": "sightengineSecret",
