@@ -97,7 +97,7 @@ const BannerDialogue = () => {
       if (response?.data?.status) {
 
         if (response.data.url) {
-          
+
           setImage(response.data.url);
           setImagePath(response.data.url);
 
@@ -114,10 +114,10 @@ const BannerDialogue = () => {
     }
   };
 
-  
+
 
   const handleSubmit = async (e: any) => {
-    
+
 
     if (!image) {
       let error = {} as ErrorState;
