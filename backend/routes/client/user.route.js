@@ -43,6 +43,11 @@ route.delete("/deleteUserAccount", checkAccessWithSecretKey(), UserController.de
 //verify username ( always be unique )
 route.get("/validateUsername", checkAccessWithSecretKey(), UserController.validateUsername);
 
+// Live username availability (Instagram-style pre-registration check)
+route.get("/checkUsername", checkAccessWithSecretKey(), UserController.checkUsername);
+// Alias matching the product path GET /username/check
+route.get("/username/check", checkAccessWithSecretKey(), UserController.checkUsername);
+
 // block user
 route.post("/blockUser", checkAccessWithSecretKey(), clientAuthMiddleware, UserController.blockUser);
 

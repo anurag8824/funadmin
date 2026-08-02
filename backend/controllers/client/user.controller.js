@@ -48,12 +48,24 @@ const admin = require("../../util/privateKey");
 
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 
+/** Instagram-style handle: lowercase, [a-z0-9_], 3–30 chars, no spaces/@. */
+const normalizeUsername = (raw) =>
+  String(raw || "")
+    .trim()
+    .replace(/^@+/, "")
+    .toLowerCase();
+
+const isValidUsernameFormat = (username) => /^[a-z0-9_]{3,30}$/.test(username);
+
 //user function
 const userFunction = async (user, data_) => {
   const data = data_.body;
 
   user.name = data?.name ? data?.name?.trim() : user.name;
-  user.userName = data?.userName ? data?.userName?.trim() : user.userName;
+  if (data?.userName) {
+    const normalized = normalizeUsername(data.userName);
+    if (normalized) user.userName = normalized;
+  }
   user.gender = data?.gender ? data?.gender?.toLowerCase().trim() : user.gender;
   user.bio = data?.bio ? data?.bio?.trim() : user.bio;
   user.age = data?.age ? data?.age : user.age;
@@ -126,7 +138,17 @@ exports.loginOrSignUp = async (req, res) => {
 
       user.image = req.body.image ? req.body.image.trim() : user.image;
       user.name = req.body.name ? req.body.name.trim() : user.name;
-      user.userName = req.body.userName ? req.body.userName.trim() : user.userName;
+      // Do not overwrite an existing handle unless an explicit valid username is sent.
+      if (req.body.userName) {
+        const nextUsername = normalizeUsername(req.body.userName);
+        if (isValidUsernameFormat(nextUsername) && nextUsername !== normalizeUsername(user.userName)) {
+          const taken = await User.findOne({ userName: nextUsername }).lean();
+          if (taken && String(taken._id) !== String(user._id)) {
+            return res.status(200).json({ status: false, message: "This username is already taken by another user." });
+          }
+          user.userName = nextUsername;
+        }
+      }
       user.fcmToken = req.body.fcmToken ? req.body.fcmToken.trim() : user.fcmToken;
       user.identity = identity;
       user.email = req?.body?.email?.trim();
@@ -143,9 +165,37 @@ exports.loginOrSignUp = async (req, res) => {
         user: user_,
         authToken,
         signUp: false,
+        needsUsername: false,
       });
     } else {
       console.log("User signup:    ");
+
+      const requestedUsername = normalizeUsername(req.body.userName);
+      // Instagram-style: new Google/Facebook users must pick a unique username before account creation.
+      if (!isValidUsernameFormat(requestedUsername)) {
+        return res.status(200).json({
+          status: true,
+          message: "Choose a unique username to complete registration.",
+          signUp: true,
+          needsUsername: true,
+          pendingProfile: {
+            email: req?.body?.email?.trim() || emailNormalized,
+            name: req?.body?.name?.trim() || "",
+            image: req?.body?.image?.trim() || "",
+            identity,
+            loginType,
+          },
+        });
+      }
+
+      const usernameTaken = await User.findOne({ userName: requestedUsername }).lean();
+      if (usernameTaken) {
+        return res.status(200).json({
+          status: false,
+          message: "This username is already taken by another user.",
+          needsUsername: true,
+        });
+      }
 
       const uniqueId = generateHistoryUniqueId();
       const bonusCoins = settingJSON.loginBonus ? settingJSON.loginBonus : 5000;
@@ -157,6 +207,7 @@ exports.loginOrSignUp = async (req, res) => {
       newUser.emailNormalized = emailNormalized;
       newUser.identity = identity;
       newUser.loginType = loginType;
+      newUser.userName = requestedUsername;
 
       const user = await userFunction(newUser, req);
       const authToken = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -165,6 +216,7 @@ exports.loginOrSignUp = async (req, res) => {
         status: true,
         message: "A new user has registered an account.",
         signUp: true,
+        needsUsername: false,
         user: user,
         authToken,
       });
@@ -369,7 +421,11 @@ exports.update = async (req, res) => {
       });
     }
 
-    const [user, existingUser] = await Promise.all([User.findOne({ _id: req.query.userId }), req?.body?.userName?.trim() ? User.findOne({ userName: req.body.userName.trim() })?.lean() : null]);
+    const requestedUsername = req?.body?.userName ? normalizeUsername(req.body.userName) : "";
+    const [user, existingUser] = await Promise.all([
+      User.findOne({ _id: req.query.userId }),
+      requestedUsername ? User.findOne({ userName: requestedUsername })?.lean() : null,
+    ]);
 
     if (!user) {
       if (req?.body?.image) {
@@ -388,6 +444,17 @@ exports.update = async (req, res) => {
     }
 
     if (req.body.userName) {
+      const nextUsername = normalizeUsername(req.body.userName);
+      if (!isValidUsernameFormat(nextUsername)) {
+        if (req?.body?.image) {
+          await deleteFromStorage(req?.body?.image);
+        }
+        return res.status(200).json({
+          status: false,
+          message: "Username must be 3–30 characters: lowercase letters, numbers, and underscore only.",
+        });
+      }
+
       if (existingUser && existingUser._id.toString() !== user._id.toString()) {
         if (req?.body?.image) {
           await deleteFromStorage(req?.body?.image);
@@ -396,7 +463,7 @@ exports.update = async (req, res) => {
         return res.status(200).json({ status: false, message: "This username is already taken by another user." });
       }
 
-      user.userName = req.body.userName.trim();
+      user.userName = nextUsername;
     }
 
     if (req?.body?.image) {
@@ -406,7 +473,6 @@ exports.update = async (req, res) => {
     }
 
     user.name = req.body.name ? req.body.name : user.name;
-    user.userName = req.body.userName ? req.body.userName : user.userName;
     user.mobileNumber = req.body.mobileNumber ? req.body.mobileNumber : user.mobileNumber;
     user.gender = req.body.gender ? req.body.gender?.toLowerCase()?.trim() : user.gender;
     user.bio = req.body.bio ? req.body.bio : user.bio;
@@ -1012,33 +1078,84 @@ exports.deleteUserAccount = async (req, res) => {
 //verify username ( always be unique )
 exports.validateUsername = async (req, res) => {
   try {
-    const newUsername = req.query.userName?.trim();
+    const newUsername = normalizeUsername(req.query.userName);
 
     if (!req.query.userId || !newUsername) {
-      return res.status(200).json({ status: false, message: "Oops ! Invalid details!" });
+      return res.status(200).json({ status: false, message: "Oops ! Invalid details!", available: false });
     }
 
-    const [user, existingUser] = await Promise.all([User.findOne({ _id: req.query.userId }), User.findOne({ userName: newUsername.trim() })]);
+    if (!isValidUsernameFormat(newUsername)) {
+      return res.status(200).json({
+        status: false,
+        available: false,
+        message: "Username must be 3–30 characters: lowercase letters, numbers, and underscore only.",
+      });
+    }
+
+    const [user, existingUser] = await Promise.all([
+      User.findOne({ _id: req.query.userId }),
+      User.findOne({ userName: newUsername }),
+    ]);
 
     if (!user) {
-      return res.status(200).json({ status: false, message: "User not found." });
+      return res.status(200).json({ status: false, message: "User not found.", available: false });
     }
 
     if (user.isBlock) {
-      return res.status(200).json({ status: false, message: "You are blocked by the admin." });
+      return res.status(200).json({ status: false, message: "You are blocked by the admin.", available: false });
     }
 
     if (existingUser && existingUser._id.toString() !== user._id.toString()) {
-      return res.status(200).json({ status: false, message: "This username is already taken by another user." });
+      return res.status(200).json({
+        status: false,
+        available: false,
+        message: "This username is already taken by another user.",
+      });
     }
 
     return res.status(200).json({
       status: true,
+      available: true,
       message: "Username is valid and available.",
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
+    return res.status(500).json({ status: false, available: false, message: error.message || "Internal Server Error" });
+  }
+};
+
+/**
+ * Public username availability check (pre-registration / live validation).
+ * GET /client/user/checkUsername?username=john
+ * Also accepts ?userName= for backward compatibility.
+ */
+exports.checkUsername = async (req, res) => {
+  try {
+    const username = normalizeUsername(req.query.username || req.query.userName);
+
+    if (!username) {
+      return res.status(200).json({ status: false, available: false, message: "username is required." });
+    }
+
+    if (!isValidUsernameFormat(username)) {
+      return res.status(200).json({
+        status: true,
+        available: false,
+        message: "Username must be 3–30 characters: lowercase letters, numbers, and underscore only.",
+      });
+    }
+
+    const existing = await User.findOne({ userName: username }).select("_id").lean();
+    const available = !existing;
+
+    return res.status(200).json({
+      status: true,
+      available,
+      message: available ? "Username available" : "Username already taken",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: false, available: false, message: error.message || "Internal Server Error" });
   }
 };
 

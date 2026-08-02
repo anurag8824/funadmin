@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, default: "Andraw Ainsley" },
-    userName: { type: String, default: "@Andraw Ainsley" },
+    userName: { type: String, default: "" },
     image: { type: String, default: "" },
     isProfileImageBanned: { type: Boolean, default: false },
     gender: { type: String, default: "Female" },
@@ -56,5 +56,15 @@ userSchema.index({ isBlock: 1 });
 userSchema.index({ isFake: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ emailNormalized: 1 }, { unique: true, sparse: true, partialFilterExpression: { emailNormalized: { $type: "string" } } });
+// Globally unique usernames (Instagram-style). Only enforce for valid handles so legacy defaults don't collide.
+userSchema.index(
+  { userName: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      userName: { $regex: /^[a-z0-9_]{3,30}$/ },
+    },
+  }
+);
 
 module.exports = mongoose.model("User", userSchema);

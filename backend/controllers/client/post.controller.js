@@ -1089,23 +1089,27 @@ exports.postsOfUser = async (req, res) => {
     const userIdOfPost = new mongoose.Types.ObjectId(req.query.toUserId); // userId of post
 
     const { viewer: user, excludedUserIds } = await resolveBlockContext(userId);
+
+    // If viewing someone who blocked / is blocked, return empty rather than corrupting $match.
+    if (excludedUserIds.some((id) => String(id) === String(userIdOfPost))) {
+      if (!user) {
+        return res.status(200).json({ status: false, message: "User does not found." });
+      }
+      return res.status(200).json({
+        status: true,
+        message: "Retrieve posts of the particular user.",
+        data: [],
+      });
+    }
+
     const posts = await Post.aggregate([
       {
         $match: {
           userId: userIdOfPost,
-          ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
-        },
-      },
-      {
-        $project: {
-          mainPostImage: 1,
-          postImage: 1,
-          caption: 1,
-          createdAt: 1,
         },
       },
       ...(req.query.userId === req.query.toUserId
-        ? [] // No filter for `isBanned` if userId matches toUserId
+        ? []
         : [
             {
               $addFields: {
@@ -1122,6 +1126,93 @@ exports.postsOfUser = async (req, res) => {
               $match: { postImage: { $ne: [] } },
             },
           ]),
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: false } },
+      {
+        $lookup: {
+          from: "likehistoryofpostorvideos",
+          let: { postId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ["$postId", "$$postId"] }, { $eq: ["$userId", userId] }],
+                },
+              },
+            },
+          ],
+          as: "likeHistory",
+        },
+      },
+      {
+        $lookup: {
+          from: "likehistoryofpostorvideos",
+          localField: "_id",
+          foreignField: "postId",
+          as: "totalLikes",
+        },
+      },
+      {
+        $lookup: {
+          from: "postorvideocomments",
+          localField: "_id",
+          foreignField: "postId",
+          as: "totalComments",
+        },
+      },
+      {
+        $lookup: {
+          from: "songs",
+          localField: "songId",
+          foreignField: "_id",
+          as: "song",
+        },
+      },
+      {
+        $unwind: {
+          path: "$song",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          caption: 1,
+          postImage: 1,
+          mainPostImage: 1,
+          shareCount: 1,
+          songId: 1,
+          songTitle: "$song.songTitle",
+          songImage: "$song.songImage",
+          songLink: "$song.songLink",
+          singerName: "$song.singerName",
+          createdAt: 1,
+          userId: "$user._id",
+          name: "$user.name",
+          userName: "$user.userName",
+          userImage: "$user.image",
+          isVerified: "$user.isVerified",
+          isLike: { $gt: [{ $size: "$likeHistory" }, 0] },
+          isSaved: {
+            $cond: {
+              if: { $in: [userId, { $ifNull: ["$savedBy", []] }] },
+              then: true,
+              else: false,
+            },
+          },
+          totalLikes: { $size: "$totalLikes" },
+          totalComments: { $size: "$totalComments" },
+          time: {
+            $dateToString: { format: "%Y-%m-%d %H:%M", date: "$createdAt" },
+          },
+        },
+      },
       {
         $sort: { createdAt: -1 },
       },

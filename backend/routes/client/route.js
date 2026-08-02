@@ -41,6 +41,7 @@ const draft = require("./draft.route");
 
 //exports client's route.js
 route.use("/user", user);
+route.get("/username/check", require("../../checkAccess")(), require("../../controllers/client/user.controller").checkUsername);
 route.use("/post", post);
 route.use("/video", video);
 route.use("/chat", chat);

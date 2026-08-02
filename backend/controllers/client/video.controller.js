@@ -548,11 +548,22 @@ exports.videosOfUser = async (req, res, next) => {
     const userIdOfVideo = new mongoose.Types.ObjectId(req.query.toUserId); // userId of video
 
     const { viewer: user, excludedUserIds } = await resolveBlockContext(userId);
+
+    if (excludedUserIds.some((id) => String(id) === String(userIdOfVideo))) {
+      if (!user) {
+        return res.status(200).json({ status: false, message: "User not found." });
+      }
+      return res.status(200).json({
+        status: true,
+        message: "Videos of the particular user.",
+        data: [],
+      });
+    }
+
     const videos = await Video.aggregate([
       {
         $match: {
           userId: userIdOfVideo,
-          ...(excludedUserIds.length ? { userId: { $nin: excludedUserIds } } : {}),
           ...(req.query.userId === req.query.toUserId ? {} : { isBanned: false }),
         },
       },
@@ -619,10 +630,27 @@ exports.videosOfUser = async (req, res, next) => {
             as: "views",
           },
         },
+      {
+          $lookup: {
+            from: "followerfollowings",
+            let: { postUserId: "$userId", requestingUserId: userId },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [{ $eq: ["$toUserId", "$$postUserId"] }, { $eq: ["$fromUserId", "$$requestingUserId"] }],
+                  },
+                },
+              },
+            ],
+            as: "isFollow",
+          },
+        },
         {
           $addFields: {
             isLike: { $cond: { if: { $gt: [{ $size: "$likes" }, 0] }, then: true, else: false } },
             isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
+            isFollow: { $cond: { if: { $gt: [{ $size: "$isFollow" }, 0] }, then: true, else: false } },
             totalLikes: { $size: "$totalLikes" },
             totalComments: { $size: "$comments" },
             totalViews: { $size: "$views" },
@@ -652,6 +680,7 @@ exports.videosOfUser = async (req, res, next) => {
 
             isLike: 1,
             isSaved: 1,
+            isFollow: 1,
             totalLikes: 1,
             totalComments: 1,
             totalViews: 1,
