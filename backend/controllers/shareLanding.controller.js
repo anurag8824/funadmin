@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Video = require("../models/video.model");
 const Post = require("../models/post.model");
 const Story = require("../models/story.model");
+const User = require("../models/user.model");
 const { toAbsoluteMediaUrl } = require("../util/adminMediaUrl");
 
 const PLAY_STORE_URL =
@@ -15,6 +16,13 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function normalizeUsername(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/^@/, "")
+    .toLowerCase();
 }
 
 function buildShareHtml({ title, description, image, pageUrl, appSchemeUrl }) {
@@ -190,6 +198,41 @@ exports.shareStory = async (req, res) => {
     );
   } catch (error) {
     console.error("shareStory error:", error);
+    return res.status(500).send("Internal Server Error");
+  }
+};
+
+/**
+ * Profile share landing: /u/:username
+ * Opens app via funtap://profile/{id}; falls back to Play Store if not installed.
+ */
+exports.shareProfile = async (req, res) => {
+  try {
+    const username = normalizeUsername(req.params.username);
+    if (!username || username.length < 3) {
+      return res.status(404).send("Profile not found");
+    }
+
+    const user = await User.findOne({ userName: username })
+      .select("_id name userName image bio")
+      .lean();
+    if (!user) {
+      return res.status(404).send("Profile not found");
+    }
+
+    const display = user.name || user.userName || "FuntApp";
+    const title = `${display} on FuntApp`;
+    const description = (user.bio || `Follow @${user.userName} on FuntApp`).slice(0, 180);
+    const image = toAbsoluteMediaUrl(user.image || "");
+    const pageUrl = `${WEB_HOST}/u/${user.userName}`;
+    const appSchemeUrl = `funtap://profile/${user._id}`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(
+      buildShareHtml({ title, description, image, pageUrl, appSchemeUrl }),
+    );
+  } catch (error) {
+    console.error("shareProfile error:", error);
     return res.status(500).send("Internal Server Error");
   }
 };

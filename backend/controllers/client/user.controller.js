@@ -136,12 +136,43 @@ exports.loginOrSignUp = async (req, res) => {
         return res.status(200).json({ status: false, message: "You are blocked by the admin." });
       }
 
+      // Existing account but never chose a valid Instagram-style username → force onboarding.
+      const existingUsername = normalizeUsername(user.userName);
+      const incomingUsername = normalizeUsername(req.body.userName);
+      if (!isValidUsernameFormat(existingUsername)) {
+        if (!isValidUsernameFormat(incomingUsername)) {
+          return res.status(200).json({
+            status: true,
+            message: "Choose a unique username to complete registration.",
+            signUp: true,
+            needsUsername: true,
+            pendingProfile: {
+              email: req?.body?.email?.trim() || user.email || emailNormalized,
+              name: (req?.body?.name ? String(req.body.name).trim() : "") || user.name || "",
+              image: (req?.body?.image ? String(req.body.image).trim() : "") || user.image || "",
+              identity,
+              loginType,
+            },
+          });
+        }
+
+        const taken = await User.findOne({ userName: incomingUsername }).lean();
+        if (taken && String(taken._id) !== String(user._id)) {
+          return res.status(200).json({
+            status: false,
+            message: "This username is already taken by another user.",
+            needsUsername: true,
+          });
+        }
+        user.userName = incomingUsername;
+      }
+
       user.image = req.body.image ? req.body.image.trim() : user.image;
       user.name = req.body.name ? req.body.name.trim() : user.name;
-      // Do not overwrite an existing handle unless an explicit valid username is sent.
-      if (req.body.userName) {
+      // Do not overwrite an existing valid handle unless an explicit valid username is sent.
+      if (req.body.userName && isValidUsernameFormat(existingUsername)) {
         const nextUsername = normalizeUsername(req.body.userName);
-        if (isValidUsernameFormat(nextUsername) && nextUsername !== normalizeUsername(user.userName)) {
+        if (isValidUsernameFormat(nextUsername) && nextUsername !== existingUsername) {
           const taken = await User.findOne({ userName: nextUsername }).lean();
           if (taken && String(taken._id) !== String(user._id)) {
             return res.status(200).json({ status: false, message: "This username is already taken by another user." });
