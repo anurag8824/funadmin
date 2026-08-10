@@ -10,6 +10,9 @@ const settingController = require("../../controllers/admin/setting.controller");
 //update Setting
 route.patch("/updateSetting", checkAccessWithSecretKey(), settingController.updateSetting);
 
+// Android force-update (upsert — creates Setting if missing)
+route.patch("/updateForceUpdate", checkAccessWithSecretKey(), settingController.updateForceUpdate);
+
 //get setting data
 route.get("/getSetting", checkAccessWithSecretKey(), settingController.getSetting);
 

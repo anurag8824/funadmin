@@ -9,6 +9,7 @@ import ReportReasonSetting from "@/component/setting/ReportReasonSetting";
 import AdSetting from "@/component/setting/AdSetting";
 import StorageSettingPage from "@/component/setting/StorageSettingPage";
 import UpdateProfilePictureCollection from "@/component/setting/updateProfilePictureCollection";
+import ForceUpdateSetting from "@/component/setting/ForceUpdateSetting";
 
 const SettingPage = () => {
   const [multiButtonSelect, setMultiButtonSelect] = useState("Setting");
@@ -23,9 +24,9 @@ const SettingPage = () => {
               titleShow={true}
               setMultiButtonSelect={setMultiButtonSelect}
               multiButtonSelect={multiButtonSelect}
-              // name={`Setting`}
               labelData={[
                 "Setting",
+                "Force Update",
                 "Ads Setting",
                 "Storage Setting",
                 "Payment Setting",
@@ -37,9 +38,9 @@ const SettingPage = () => {
           </div>
 
           {multiButtonSelect == "Setting" && <AppSetting />}
+          {multiButtonSelect == "Force Update" && <ForceUpdateSetting />}
           {multiButtonSelect == "Ads Setting" && <AdSetting />}
           {multiButtonSelect == "Payment Setting" && <PaymentSetting />}
-
           {multiButtonSelect == "Withdraw Setting" && <WithdrawSetting />}
           {multiButtonSelect == "Report Reason" && <ReportReasonSetting />}
           {multiButtonSelect == "Storage Setting" && <StorageSettingPage />}

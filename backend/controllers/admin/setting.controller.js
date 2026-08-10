@@ -2,6 +2,56 @@ const Setting = require("../../models/setting.model");
 
 //deleteFromStorage
 const { deleteFromStorage } = require("../../util/storageHelper");
+const { updateSettingFile } = require("../../util/bootstrapSettings");
+
+function parseForceUpdateBool(value) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
+/**
+ * Upsert Android force-update fields.
+ * Creates a Setting document if none exists yet.
+ * PATCH /admin/setting/updateForceUpdate
+ */
+exports.updateForceUpdate = async (req, res) => {
+  try {
+    let setting = await Setting.findOne().sort({ createdAt: -1 });
+    if (!setting) {
+      setting = new Setting();
+    }
+
+    if (req.body.androidMinVersionCode !== undefined && req.body.androidMinVersionCode !== null && req.body.androidMinVersionCode !== "") {
+      const code = parseInt(req.body.androidMinVersionCode, 10);
+      setting.androidMinVersionCode = Number.isFinite(code) ? code : 0;
+    }
+    if (req.body.forceUpdateAndroid !== undefined && req.body.forceUpdateAndroid !== null && req.body.forceUpdateAndroid !== "") {
+      setting.forceUpdateAndroid = parseForceUpdateBool(req.body.forceUpdateAndroid);
+    }
+    if (req.body.androidAppUrl !== undefined && req.body.androidAppUrl !== null) {
+      const url = String(req.body.androidAppUrl).trim();
+      if (url) {
+        setting.androidAppUrl = url;
+      }
+    }
+
+    await setting.save();
+    updateSettingFile(setting.toObject ? setting.toObject() : setting);
+
+    return res.status(200).json({
+      status: true,
+      message: "Android force update setting saved.",
+      data: {
+        _id: setting._id,
+        androidMinVersionCode: setting.androidMinVersionCode,
+        forceUpdateAndroid: setting.forceUpdateAndroid,
+        androidAppUrl: setting.androidAppUrl,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
+  }
+};
 
 //create setting
 exports.createSetting = async (req, res, next) => {

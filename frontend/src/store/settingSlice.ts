@@ -68,6 +68,19 @@ export const updateSetting = createAsyncThunk(
   }
 );
 
+/** Upsert Android force-update fields (creates Setting if DB has none). */
+export const updateForceUpdate = createAsyncThunk(
+  "admin/setting/updateForceUpdate",
+  async (payload: {
+    androidMinVersionCode: number;
+    forceUpdateAndroid: boolean;
+    androidAppUrl: string;
+  }) => {
+    const res = await axios.patch(`admin/setting/updateForceUpdate`, payload);
+    return res.data;
+  }
+);
+
 export const updateProfileManagement = createAsyncThunk(
   "/admin/setting/updateProfilePictureCollection",
   async (payload: any) => {
@@ -205,6 +218,25 @@ const settingReducer = createSlice({
         state.isLoading = false;
       }
     );
+
+    builder.addCase(updateForceUpdate.pending, (state) => {
+      state.isLoading = true;
+    });
+    builder.addCase(
+      updateForceUpdate.fulfilled,
+      (state, action: PayloadAction<any>) => {
+        state.isLoading = false;
+        if (action.payload?.data) {
+          state.settingData = {
+            ...(state.settingData || {}),
+            ...action.payload.data,
+          };
+        }
+      }
+    );
+    builder.addCase(updateForceUpdate.rejected, (state) => {
+      state.isLoading = false;
+    });
 
     builder.addCase(
       getReportSetting.pending,
