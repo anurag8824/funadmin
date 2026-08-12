@@ -13,6 +13,8 @@ exports.getSetting = async (req, res) => {
   }
 };
 
+const { projectAdSetting } = require("../../util/adSettingProjection");
+
 //get ad setting
 exports.fetchAdSetting = async (req, res) => {
   try {
@@ -21,7 +23,11 @@ exports.fetchAdSetting = async (req, res) => {
       return res.status(200).json({ status: false, message: "Setting does not found." });
     }
 
-    return res.status(200).json({ status: true, message: "Success", adSetting: setting });
+    return res.status(200).json({
+      status: true,
+      message: "Success",
+      adSetting: projectAdSetting(setting),
+    });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });

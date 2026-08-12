@@ -103,14 +103,18 @@ const settingSchema = new mongoose.Schema(
     isGoogle: { type: Boolean, default: false },
     android: {
       google: {
-        native: { type: String, default: "android_native_id" },
-        interstitial: { type: String, default: "android_interstitial_id" },
+        appId: { type: String, default: "" },
+        banner: { type: String, default: "" },
+        native: { type: String, default: "" },
+        interstitial: { type: String, default: "" },
       },
     },
     ios: {
       google: {
-        native: { type: String, default: "ios_native_id" },
-        interstitial: { type: String, default: "ios_interstitial_id" },
+        appId: { type: String, default: "" },
+        banner: { type: String, default: "" },
+        native: { type: String, default: "" },
+        interstitial: { type: String, default: "" },
       },
     },
   },

@@ -19,6 +19,9 @@ route.get("/validateSession", checkAccessWithSecretKey(), clientAuthMiddleware, 
 //update profile of the user
 route.patch("/update", checkAccessWithSecretKey(), UserController.update);
 
+// sync push token after login (FCM often arrives late on mobile data)
+route.patch("/updateFcmToken", checkAccessWithSecretKey(), UserController.updateFcmToken);
+
 //get user profile who login
 route.get("/getProfile", checkAccessWithSecretKey(), UserController.getProfile);
 

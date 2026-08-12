@@ -13,6 +13,30 @@ import React, { useEffect, useState } from "react";
 import Multiselect from "multiselect-react-dropdown";
 import { useSelector } from "react-redux";
 import useClearSessionStorageOnPopState from "@/extra/ClearStorage";
+import { setToast } from "@/util/toastServices";
+
+const AD_UNIT_ID_REGEX = /^ca-app-pub-\d+\/\d+$/;
+const APP_ID_REGEX = /^ca-app-pub-\d+~\d+$/;
+
+function validateAdUnitId(value: string | undefined, fieldName: string): string | null {
+  if (!value || !value.trim()) return null;
+  const trimmed = value.trim();
+  if (/_id$/i.test(trimmed)) return `${fieldName} cannot be a placeholder value.`;
+  if (!AD_UNIT_ID_REGEX.test(trimmed)) {
+    return `${fieldName} must match format ca-app-pub-XXXXXXXX/YYYYYYYYYY.`;
+  }
+  return null;
+}
+
+function validateAppId(value: string | undefined, fieldName: string): string | null {
+  if (!value || !value.trim()) return null;
+  const trimmed = value.trim();
+  if (/_id$/i.test(trimmed)) return `${fieldName} cannot be a placeholder value.`;
+  if (!APP_ID_REGEX.test(trimmed)) {
+    return `${fieldName} must match format ca-app-pub-XXXXXXXX~YYYYYYYYYY.`;
+  }
+  return null;
+}
 
 
 const MaterialUISwitch = styled(Switch)<{ theme: ThemeType }>(({ theme }) => ({
@@ -75,6 +99,8 @@ const AdSetting = () => {
   const dispatch = useAppDispatch();
   const [data, setData] = useState<any>();
 
+  const [androidGoogleAppId, setAndroidGoogleAppId] = useState("");
+  const [androidGoogleBanner, setAndroidGoogleBanner] = useState("");
   const [androidGoogleInterstitial, setAndroidGoogleInterstitial] =
     useState("");
   const [googleNative, setGoogleNative] = useState();
@@ -103,6 +129,8 @@ const AdSetting = () => {
   }, [settingData]);
 
   useEffect(() => {
+    setAndroidGoogleAppId(data?.android?.google?.appId || "");
+    setAndroidGoogleBanner(data?.android?.google?.banner || "");
     setAndroidGoogleInterstitial(data?.android?.google?.interstitial);
     setGoogleNative(data?.android?.google?.native);
     setIosInterstial(data?.ios?.google?.interstitial);
@@ -126,10 +154,23 @@ const AdSetting = () => {
   };
 
   const handleSubmit = () => {
+    const validationErrors = [
+      validateAppId(androidGoogleAppId, "Android AdMob App ID"),
+      validateAdUnitId(androidGoogleBanner, "Android Banner Unit ID"),
+      validateAdUnitId(androidGoogleInterstitial, "Android Interstitial Unit ID"),
+      validateAdUnitId(googleNative, "Android Native Unit ID"),
+      validateAdUnitId(iosInterstital, "iOS Interstitial Unit ID"),
+      validateAdUnitId(iosNative, "iOS Native Unit ID"),
+    ].filter(Boolean);
 
-    
+    if (validationErrors.length > 0) {
+      setToast("error", validationErrors[0] as string);
+      return;
+    }
 
     const settingDataAd = {
+      androidGoogleAppId: androidGoogleAppId?.trim(),
+      androidGoogleBanner: androidGoogleBanner?.trim(),
       androidGoogleInterstitial: androidGoogleInterstitial,
       androidGoogleNative: googleNative,
       iosGoogleNative: iosNative,
@@ -204,18 +245,40 @@ const AdSetting = () => {
             <div className="mb-4">
               <div className="withdrawal-box payment-box" >
                 <h6>Android</h6>
+                <p className="text-muted small mb-2">
+                  App ID format: ca-app-pub-XXXXXXXX~YYYYYYYYYY. Unit ID format: ca-app-pub-XXXXXXXX/YYYYYYYYYY.
+                </p>
+                <div className="col-12 withdrawal-input border-setting">
+                  <Input
+                    label={"Android AdMob App ID"}
+                    name={"androidGoogleAppId"}
+                    type={"text"}
+                    value={androidGoogleAppId}
+                    placeholder={"ca-app-pub-XXXXXXXX~YYYYYYYYYY"}
+                    onChange={(e) => {
+                      setAndroidGoogleAppId(e.target.value);
+                    }}
+                  />
+                </div>
+                <div className="col-12 withdrawal-input border-setting">
+                  <Input
+                    label={"Android Banner Unit ID"}
+                    name={"androidGoogleBanner"}
+                    type={"text"}
+                    value={androidGoogleBanner}
+                    placeholder={"ca-app-pub-XXXXXXXX/YYYYYYYYYY"}
+                    onChange={(e) => {
+                      setAndroidGoogleBanner(e.target.value);
+                    }}
+                  />
+                </div>
                 <div className="col-12 withdrawal-input border-setting">
                   <Input
                     label={"Android Google Interstitial"}
                     name={"androidGoogleInterstitial"}
                     type={"text"}
                     value={androidGoogleInterstitial}
-                    placeholder={"Android Google Interstitial"}
-                    // errorMessage={
-                    //   error.androidGoogleInterstitial &&
-                    //   error.androidGoogleInterstitial
-                    // }
-                    // placeholder={"Enter Detail..."}
+                    placeholder={"ca-app-pub-XXXXXXXX/YYYYYYYYYY"}
                     onChange={(e) => {
                       setAndroidGoogleInterstitial(e.target.value);
                     }}
@@ -249,7 +312,7 @@ const AdSetting = () => {
                   <div className="col-12 flex-wrap mt-1 d-flex justify-content-between align-items-center">
                     <div className="col-12 d-flex justify-content-between align-items-center border-bottom">
                       <label className="custom-input label m-0">
-                        Ad position in video(on/off)
+                        Ad position in video/reels (banner ads)
                       </label>
                       <FormControlLabel
                         control={
@@ -266,7 +329,7 @@ const AdSetting = () => {
 
                     <div className="col-12 d-flex justify-content-between align-items-center border-bottom">
                       <label className="custom-input label m-0">
-                        Ad position in Feed (on / off)
+                        Ad position in Feed (native ads)
                       </label>
                       <FormControlLabel
                         control={
@@ -283,7 +346,7 @@ const AdSetting = () => {
 
                     <div className="col-12 d-flex justify-content-between align-items-center border-bottom">
                       <label className="custom-input label m-0">
-                        <span>Ad position in chat (On/off)</span>
+                        <span>Ad position in chat (banner header)</span>
                       </label>
                       <FormControlLabel
                         control={
@@ -300,7 +363,7 @@ const AdSetting = () => {
 
                     <div className="col-12 d-flex justify-content-between align-items-center border-bottom">
                       <label className="custom-input label m-0">
-                        <span>Live streaming back button ad (on/off)</span>
+                        <span>Live streaming back button (interstitial)</span>
                       </label>
                       <FormControlLabel
                         control={
@@ -323,7 +386,7 @@ const AdSetting = () => {
 
                     <div className="col-12 d-flex justify-content-between align-items-center">
                       <label className="custom-input label m-0">
-                        <span>Chat back button ads (On/off)</span>
+                        <span>Chat back button (interstitial)</span>
                       </label>
                       <FormControlLabel
                         control={

@@ -14,14 +14,18 @@ module.exports = {
   },
   "android": {
     "google": {
-      "interstitial": "ca-app-pub-3940256099942544/1033173712",
-      "native": "ca-app-pub-3940256099942544/2247696110"
+      "appId": "ca-app-pub-7177795034518472~3347511713",
+      "banner": "ca-app-pub-7177795034518472/6300978111",
+      "interstitial": "ca-app-pub-7177795034518472/1033173712",
+      "native": "ca-app-pub-7177795034518472/2247696110"
     }
   },
   "ios": {
     "google": {
-      "interstitial": "ca-app-pub-3940256099942544/1033173712",
-      "native": "ca-app-pub-3940256099942544/2247696110"
+      "appId": "",
+      "banner": "",
+      "interstitial": "",
+      "native": ""
     }
   },
   "stripeSwitch": true,

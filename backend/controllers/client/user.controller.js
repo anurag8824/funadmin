@@ -86,7 +86,10 @@ const userFunction = async (user, data_) => {
 
   user.loginType = data.loginType ? data.loginType : user.loginType;
   user.identity = data.identity ? data.identity : user.identity;
-  user.fcmToken = data.fcmToken ? data.fcmToken : user.fcmToken;
+  const nextFcm = typeof data.fcmToken === "string" ? data.fcmToken.trim() : "";
+  if (nextFcm && nextFcm !== "pending") {
+    user.fcmToken = nextFcm;
+  }
   user.uniqueId = !user.uniqueId ? await generateUniqueId() : user.uniqueId;
 
   await user.save();
@@ -102,13 +105,18 @@ exports.checkUser = async (_req, res) => {
   });
 };
 
-//user login and sign up (fcmToken required for push notifications)
+// user login and sign up — fcmToken is optional (often missing on flaky mobile data / Play Services)
 exports.loginOrSignUp = async (req, res) => {
   const startedAt = Date.now();
   try {
-    if (req.body.loginType === undefined || !req.body.fcmToken) {
+    if (req.body.loginType === undefined) {
       return res.status(200).json({ status: false, message: "Oops ! Invalid details!" });
     }
+    const incomingFcm =
+      typeof req.body.fcmToken === "string" ? req.body.fcmToken.trim() : "";
+    // Ignore placeholder from clients that could not fetch a real FCM token yet.
+    const fcmToken =
+      incomingFcm && incomingFcm !== "pending" ? incomingFcm : "";
     const loginType = req?.body?.loginType;
     if (![2, 4].includes(loginType)) {
       return res.status(200).json({ status: false, message: "Only Google and Facebook login are allowed." });
@@ -180,7 +188,10 @@ exports.loginOrSignUp = async (req, res) => {
           user.userName = nextUsername;
         }
       }
-      user.fcmToken = req.body.fcmToken ? req.body.fcmToken.trim() : user.fcmToken;
+      // Only overwrite when we have a real FCM token (not empty / "pending").
+      if (fcmToken) {
+        user.fcmToken = fcmToken;
+      }
       user.identity = identity;
       user.email = req?.body?.email?.trim();
       user.emailNormalized = emailNormalized;
@@ -509,6 +520,10 @@ exports.update = async (req, res) => {
     user.bio = req.body.bio ? req.body.bio : user.bio;
     user.countryFlagImage = req.body.countryFlagImage ? req.body.countryFlagImage : user.countryFlagImage;
     user.country = req.body.country ? req.body.country : user.country;
+    const nextFcm = typeof req.body.fcmToken === "string" ? req.body.fcmToken.trim() : "";
+    if (nextFcm && nextFcm !== "pending") {
+      user.fcmToken = nextFcm;
+    }
     await user.save();
 
     return res.status(200).json({ status: true, message: "The user's profile has been modified.", user: user });
@@ -519,6 +534,33 @@ exports.update = async (req, res) => {
 
     console.log(error);
     return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
+  }
+};
+
+/** Lightweight FCM token sync — used when token arrives after login (common on mobile data). */
+exports.updateFcmToken = async (req, res) => {
+  try {
+    const userId = req.query.userId || req.body?.userId;
+    const fcmToken =
+      typeof req.body?.fcmToken === "string" ? req.body.fcmToken.trim() : "";
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(200).json({ status: false, message: "Oops ! Invalid details!" });
+    }
+    if (!fcmToken || fcmToken === "pending") {
+      return res.status(200).json({ status: false, message: "fcmToken is required." });
+    }
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      { $set: { fcmToken } },
+      { new: true },
+    ).select("_id fcmToken");
+    if (!updated) {
+      return res.status(200).json({ status: false, message: "User does not found." });
+    }
+    return res.status(200).json({ status: true, message: "FCM token updated." });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });
   }
 };
 

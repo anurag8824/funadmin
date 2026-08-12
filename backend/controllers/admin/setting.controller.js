@@ -3,6 +3,7 @@ const Setting = require("../../models/setting.model");
 //deleteFromStorage
 const { deleteFromStorage } = require("../../util/storageHelper");
 const { updateSettingFile } = require("../../util/bootstrapSettings");
+const { validateAdSettingPayload } = require("../../util/validateAdMobIds");
 
 function parseForceUpdateBool(value) {
   return value === true || value === "true" || value === 1 || value === "1";
@@ -83,6 +84,11 @@ exports.updateSetting = async (req, res) => {
       return res.status(200).json({ status: false, message: "Setting does not found." });
     }
 
+    const adValidationError = validateAdSettingPayload(req.body);
+    if (adValidationError) {
+      return res.status(400).json({ status: false, message: adValidationError });
+    }
+
     setting.sightengineUser = req.body.sightengineUser ? req.body.sightengineUser : setting.sightengineUser;
     setting.sightengineSecret = req.body.sightengineSecret ? req.body.sightengineSecret : setting.sightengineSecret;
     setting.androidLicenseKey = req.body.androidLicenseKey ? req.body.androidLicenseKey : setting.androidLicenseKey;
@@ -138,10 +144,30 @@ exports.updateSetting = async (req, res) => {
     if (req.body.androidAppUrl) {
       setting.androidAppUrl = req.body.androidAppUrl;
     }
-    setting.android.google.interstitial = req.body.androidGoogleInterstitial ? req.body.androidGoogleInterstitial : setting.android.google.interstitial;
-    setting.android.google.native = req.body.androidGoogleNative ? req.body.androidGoogleNative : setting.android.google.native;
-    setting.ios.google.interstitial = req.body.iosGoogleInterstitial ? req.body.iosGoogleInterstitial : setting.ios.google.interstitial;
-    setting.ios.google.native = req.body.iosGoogleNative ? req.body.iosGoogleNative : setting.ios.google.native;
+    if (req.body.androidGoogleAppId) {
+      setting.android.google.appId = req.body.androidGoogleAppId.trim();
+    }
+    if (req.body.androidGoogleBanner) {
+      setting.android.google.banner = req.body.androidGoogleBanner.trim();
+    }
+    setting.android.google.interstitial = req.body.androidGoogleInterstitial
+      ? req.body.androidGoogleInterstitial.trim()
+      : setting.android.google.interstitial;
+    setting.android.google.native = req.body.androidGoogleNative
+      ? req.body.androidGoogleNative.trim()
+      : setting.android.google.native;
+    if (req.body.iosGoogleAppId) {
+      setting.ios.google.appId = req.body.iosGoogleAppId.trim();
+    }
+    if (req.body.iosGoogleBanner) {
+      setting.ios.google.banner = req.body.iosGoogleBanner.trim();
+    }
+    setting.ios.google.interstitial = req.body.iosGoogleInterstitial
+      ? req.body.iosGoogleInterstitial.trim()
+      : setting.ios.google.interstitial;
+    setting.ios.google.native = req.body.iosGoogleNative
+      ? req.body.iosGoogleNative.trim()
+      : setting.ios.google.native;
 
     await setting.save();
 
