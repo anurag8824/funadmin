@@ -24,11 +24,16 @@ export type AppleAppSiteAssociation = {
   };
 };
 
+const ASSET_LINKS_RELATIONS = [
+  "delegate_permission/common.handle_all_urls",
+  "delegate_permission/common.get_login_creds",
+] as const;
+
 /** Android Digital Asset Links for funtapp.com App Links verification. */
 export function buildAssetLinks(): AssetLinksDocument {
   return [
     {
-      relation: ["delegate_permission/common.handle_all_urls"],
+      relation: [...ASSET_LINKS_RELATIONS],
       target: {
         namespace: "android_app",
         package_name: ANDROID_PACKAGE_NAME,
