@@ -2018,19 +2018,29 @@ exports.getVideoLibrary = async (req, res, next) => {
 };
 
 // GET /client/video/getVideoById/:videoId
-// Returns a single, fully-populated video document. Used by deep-link handler.
+// Returns a single video. userId query is optional (used for block/like state).
 exports.getVideoById = async (req, res) => {
   try {
     const { videoId } = req.params;
-    if (!req.query.userId || !videoId) {
-      return res.status(400).json({ status: false, message: "userId and videoId are required." });
+    if (!videoId) {
+      return res.status(200).json({ status: false, message: "videoId is required." });
+    }
+    if (!mongoose.Types.ObjectId.isValid(videoId)) {
+      return res.status(200).json({ status: false, message: "Invalid videoId format." });
     }
 
-    const userId = new mongoose.Types.ObjectId(req.query.userId);
     const vidId = new mongoose.Types.ObjectId(videoId);
+    const viewerIdRaw = req.query.userId;
+    const hasViewer =
+      viewerIdRaw && mongoose.Types.ObjectId.isValid(String(viewerIdRaw));
+    const userId = hasViewer ? new mongoose.Types.ObjectId(String(viewerIdRaw)) : null;
+
+    const viewerPromise = hasViewer
+      ? resolveBlockContext(userId)
+      : Promise.resolve({ viewer: null });
 
     const [{ viewer: user }, videos] = await Promise.all([
-      resolveBlockContext(userId),
+      viewerPromise,
       Video.aggregate([
         { $match: { _id: vidId } },
         {
@@ -2063,7 +2073,20 @@ exports.getVideoById = async (req, res) => {
           $lookup: {
             from: "likehistoryofpostorvideos",
             let: { videoId: "$_id", userId: userId },
-            pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$videoId", "$$videoId"] }, { $eq: ["$userId", "$$userId"] }] } } }],
+            pipeline: hasViewer
+              ? [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$videoId", "$$videoId"] },
+                          { $eq: ["$userId", "$$userId"] },
+                        ],
+                      },
+                    },
+                  },
+                ]
+              : [{ $match: { _id: null } }],
             as: "likeHistory",
           },
         },
@@ -2105,8 +2128,12 @@ exports.getVideoById = async (req, res) => {
             userName: "$user.userName",
             userImage: "$user.image",
             isVerified: "$user.isVerified",
-            isLike: { $cond: { if: { $gt: [{ $size: "$likeHistory" }, 0] }, then: true, else: false } },
-            isSaved: { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } },
+            isLike: hasViewer
+              ? { $cond: { if: { $gt: [{ $size: "$likeHistory" }, 0] }, then: true, else: false } }
+              : false,
+            isSaved: hasViewer
+              ? { $cond: { if: { $in: [userId, { $ifNull: ["$savedBy", []] }] }, then: true, else: false } }
+              : false,
             totalLikes: { $size: "$totalLikesArr" },
             totalComments: { $size: "$commentsArr" },
           },
@@ -2114,19 +2141,30 @@ exports.getVideoById = async (req, res) => {
       ]),
     ]);
 
-    if (!user) return res.status(200).json({ status: false, message: "User not found." });
-    if (user.isBlock) return res.status(200).json({ status: false, message: "You are blocked by the admin." });
-    if (!videos || videos.length === 0) return res.status(200).json({ status: false, message: "Video not found." });
-    const videoOwnerId = videos[0].userId;
-    if (hasUserBlocked(user, videoOwnerId)) {
-      return res.status(200).json({ status: false, message: "This video is unavailable." });
-    }
-    const owner = await User.findById(videoOwnerId).select("_id blockedUsers").lean();
-    if (hasUserBlocked(owner, userId)) {
-      return res.status(200).json({ status: false, message: "This video is unavailable." });
+    if (!videos || videos.length === 0) {
+      return res.status(200).json({ status: false, message: "Video not found." });
     }
 
-    return res.status(200).json({ status: true, message: "Video retrieved successfully.", data: videos[0] });
+    if (hasViewer) {
+      if (!user) return res.status(200).json({ status: false, message: "User not found." });
+      if (user.isBlock) {
+        return res.status(200).json({ status: false, message: "You are blocked by the admin." });
+      }
+      const videoOwnerId = videos[0].userId;
+      if (hasUserBlocked(user, videoOwnerId)) {
+        return res.status(200).json({ status: false, message: "This video is unavailable." });
+      }
+      const owner = await User.findById(videoOwnerId).select("_id blockedUsers").lean();
+      if (hasUserBlocked(owner, userId)) {
+        return res.status(200).json({ status: false, message: "This video is unavailable." });
+      }
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Video retrieved successfully.",
+      data: videos[0],
+    });
   } catch (error) {
     console.error("getVideoById error:", error);
     return res.status(500).json({ status: false, message: error.message || "Internal Server Error" });

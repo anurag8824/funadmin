@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ShareContentPage from "@/components/ShareContentPage";
-import { appPostDeepLink } from "@/lib/site";
+import { appReelDeepLink } from "@/lib/site";
 import {
-  buildPostShareMeta,
-  fetchPostById,
-  isValidPostId,
-} from "@/lib/posts";
+  buildVideoShareMeta,
+  fetchVideoById,
+  isValidVideoId,
+} from "@/lib/videos";
 
 type PageProps = {
-  params: Promise<{ postId: string }>;
+  params: Promise<{ reelId: string }>;
 };
 
 export const revalidate = 60;
@@ -17,25 +17,25 @@ export const revalidate = 60;
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const { postId } = await params;
+  const { reelId } = await params;
 
-  if (!isValidPostId(postId)) {
+  if (!isValidVideoId(reelId)) {
     return {
-      title: "Post not found | FuntApp",
+      title: "Reel not found | FuntApp",
       robots: { index: false, follow: false },
     };
   }
 
-  const post = await fetchPostById(postId);
-  if (!post) {
+  const video = await fetchVideoById(reelId);
+  if (!video) {
     return {
-      title: "Post not found | FuntApp",
-      description: "This post may have been removed or is unavailable.",
+      title: "Reel not found | FuntApp",
+      description: "This reel may have been removed or is unavailable.",
       robots: { index: false, follow: false },
     };
   }
 
-  const meta = buildPostShareMeta(post);
+  const meta = buildVideoShareMeta(video, "reel");
 
   return {
     title: meta.title,
@@ -58,7 +58,7 @@ export async function generateMetadata({
       images: meta.imageUrl ? [meta.imageUrl] : [],
     },
     other: {
-      "al:android:url": appPostDeepLink(postId),
+      "al:android:url": appReelDeepLink(reelId),
       "al:android:package": "com.infayou.funtapp",
       "al:android:app_name": "FuntApp",
       "al:web:url": meta.pageUrl,
@@ -66,31 +66,31 @@ export async function generateMetadata({
   };
 }
 
-export default async function PostPage({ params }: PageProps) {
-  const { postId } = await params;
+export default async function ReelPage({ params }: PageProps) {
+  const { reelId } = await params;
 
-  if (!isValidPostId(postId)) {
+  if (!isValidVideoId(reelId)) {
     notFound();
   }
 
-  const post = await fetchPostById(postId);
-  if (!post) {
+  const video = await fetchVideoById(reelId);
+  if (!video) {
     notFound();
   }
 
-  const meta = buildPostShareMeta(post);
+  const meta = buildVideoShareMeta(video, "reel");
 
   return (
     <ShareContentPage
-      kind="post"
-      id={post.id}
-      caption={post.caption}
-      imageUrl={post.imageUrl}
-      authorName={post.authorName}
-      authorUsername={post.authorUsername}
-      authorImageUrl={post.authorImageUrl}
+      kind="reel"
+      id={video.id}
+      caption={video.caption}
+      imageUrl={video.imageUrl}
+      authorName={video.authorName}
+      authorUsername={video.authorUsername}
+      authorImageUrl={video.authorImageUrl}
       pageUrl={meta.pageUrl}
-      deepLink={appPostDeepLink(post.id)}
+      deepLink={appReelDeepLink(video.id)}
       title={meta.title}
       description={meta.description}
     />

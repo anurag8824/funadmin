@@ -3,27 +3,40 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  PLAY_STORE_URL,
-  appPostDeepLink,
-} from "@/lib/site";
-import type { SharePost } from "@/lib/posts";
+import { PLAY_STORE_URL } from "@/lib/site";
 
-type PostSharePageProps = {
-  post: SharePost;
+export type ShareContentKind = "post" | "reel";
+
+type ShareContentPageProps = {
+  kind: ShareContentKind;
+  id: string;
+  caption: string;
+  imageUrl: string;
+  authorName: string;
+  authorUsername: string;
+  authorImageUrl: string;
   pageUrl: string;
+  deepLink: string;
   title: string;
   description: string;
 };
 
-export default function PostSharePage({
-  post,
+export default function ShareContentPage({
+  kind,
+  id,
+  caption,
+  imageUrl,
+  authorName,
+  authorUsername,
+  authorImageUrl,
   pageUrl,
+  deepLink,
   title,
   description,
-}: PostSharePageProps) {
-  const deepLink = appPostDeepLink(post.id);
-  const intentUrl = `intent://funtapp.com/post/${post.id}#Intent;scheme=https;package=com.infayou.funtapp;S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
+}: ShareContentPageProps) {
+  const contentLabel = kind === "post" ? "post" : "reel";
+  const intentPath = kind === "post" ? `post/${id}` : `video/${id}`;
+  const intentUrl = `intent://funtapp.com/${intentPath}#Intent;scheme=https;package=com.infayou.funtapp;S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -60,10 +73,14 @@ export default function PostSharePage({
           transition={{ duration: 0.45 }}
           className="overflow-hidden rounded-3xl border border-white/10 bg-[#0D0D0D]"
         >
-          {post.imageUrl ? (
-            <div className="relative aspect-square w-full bg-[#1a1a1a]">
+          {imageUrl ? (
+            <div
+              className={`relative w-full bg-[#1a1a1a] ${
+                kind === "reel" ? "aspect-[9/16] max-h-[70vh]" : "aspect-square"
+              }`}
+            >
               <Image
-                src={post.imageUrl}
+                src={imageUrl}
                 alt={title}
                 fill
                 className="object-cover"
@@ -71,39 +88,44 @@ export default function PostSharePage({
                 sizes="(max-width: 768px) 100vw, 720px"
                 unoptimized
               />
+              {kind === "reel" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <span className="rounded-full bg-black/50 px-4 py-2 text-sm">▶ Reel</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex aspect-square items-center justify-center bg-gradient-to-br from-brand-pink/20 to-brand-purple/20">
-              <span className="text-5xl">📷</span>
+              <span className="text-5xl">{kind === "reel" ? "🎬" : "📷"}</span>
             </div>
           )}
 
           <div className="p-6">
             <div className="mb-4 flex items-center gap-3">
               <div className="relative h-11 w-11 overflow-hidden rounded-full bg-brand-purple/30">
-                {post.authorImageUrl ? (
+                {authorImageUrl ? (
                   <Image
-                    src={post.authorImageUrl}
-                    alt={post.authorName}
+                    src={authorImageUrl}
+                    alt={authorName}
                     fill
                     className="object-cover"
                     unoptimized
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-sm font-bold">
-                    {post.authorName.charAt(0).toUpperCase()}
+                    {authorName.charAt(0).toUpperCase()}
                   </div>
                 )}
               </div>
               <div>
-                <p className="font-semibold">{post.authorName}</p>
-                <p className="text-sm text-[#B3B3B3]">@{post.authorUsername}</p>
+                <p className="font-semibold">{authorName}</p>
+                <p className="text-sm text-[#B3B3B3]">@{authorUsername}</p>
               </div>
             </div>
 
             <h1 className="text-xl font-bold">{title}</h1>
             <p className="mt-3 whitespace-pre-wrap text-[#B3B3B3]">
-              {post.caption || description}
+              {caption || description}
             </p>
           </div>
         </motion.div>
@@ -115,7 +137,7 @@ export default function PostSharePage({
           className="mt-8 space-y-4"
         >
           <p className="text-center text-sm text-[#B3B3B3]">
-            If FuntApp is installed, this link opens the post in the app
+            If FuntApp is installed, this link opens the {contentLabel} in the app
             automatically. Otherwise, view it here and download below.
           </p>
 

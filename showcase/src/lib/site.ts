@@ -18,3 +18,11 @@ export function webPostUrl(postId: string): string {
 export function appPostDeepLink(postId: string): string {
   return `${APP_SCHEME}://post/${postId}`;
 }
+
+export function webVideoLink(videoId: string): string {
+  return `${SITE_URL}/video/${videoId}`;
+}
+
+export function appReelDeepLink(reelId: string): string {
+  return `${APP_SCHEME}://video/${reelId}`;
+}

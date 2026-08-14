@@ -66,6 +66,9 @@ route.get("/fetchUserVideos", checkAccessWithSecretKey(), VideoController.fetchU
 //get particular user's videos ( web )
 route.get("/getVideoLibrary", checkAccessWithSecretKey(), VideoController.getVideoLibrary);
 
+// single video by ID (deep links + share landing)
+route.get("/getVideoById/:videoId", checkAccessWithSecretKey(), VideoController.getVideoById);
+
 //chunk-wise stream: supports Range header for less data and faster start (reels)
 route.get("/streamChunk", checkAccessWithSecretKey(), VideoStreamController.streamChunk);
 
