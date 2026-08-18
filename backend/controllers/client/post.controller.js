@@ -1054,14 +1054,10 @@ exports.getAllPosts = async (req, res) => {
         const [realPostOfUser, fakePostOfUser] = await Promise.all([Post.aggregate([{ $match: { isFake: false } }, ...data]), Post.aggregate([{ $match: { isFake: true } }, ...data])]);
 
         allPosts = [...realPostOfUser, ...fakePostOfUser];
-        //allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        allPosts = allPosts.sort(() => 0.5 - Math.random());
+        allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       } else {
         allPosts = await Post.aggregate([{ $match: { isFake: false } }, ...data]);
-        //allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        allPosts = allPosts.sort(() => 0.5 - Math.random());
+        allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       }
 
       const paginatedPosts = allPosts.slice((start - 1) * limit, start * limit);
@@ -1890,14 +1886,14 @@ exports.retrieveAllPosts = async (req, res, next) => {
         const [realPostOfUser, fakePostOfUser] = await Promise.all([Post.aggregate([{ $match: { isFake: false } }, ...data]), Post.aggregate([{ $match: { isFake: true } }, ...data])]);
 
         allPosts = [...realPostOfUser, ...fakePostOfUser];
-        //allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        allPosts = allPosts.sort(() => 0.5 - Math.random());
+        // allPosts = allPosts.sort(() => 0.5 - Math.random());
       } else {
         allPosts = await Post.aggregate([{ $match: { isFake: false } }, ...data]);
-        //allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        allPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        allPosts = allPosts.sort(() => 0.5 - Math.random());
+        // allPosts = allPosts.sort(() => 0.5 - Math.random());
       }
 
       const paginatedPosts = allPosts.slice((start - 1) * limit, start * limit);

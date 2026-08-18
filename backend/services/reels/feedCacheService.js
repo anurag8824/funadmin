@@ -71,11 +71,19 @@ async function initRedis() {
 
 void initRedis();
 
-function buildCacheKey(userId, cursorCreatedAt, cursorId, limit, videoId) {
-  const cursorPart = cursorCreatedAt && cursorId ? `${cursorCreatedAt}:${cursorId}` : "head";
+// function buildCacheKey(userId, cursorCreatedAt, cursorId, limit, videoId) {
+//   const cursorPart = cursorCreatedAt && cursorId ? `${cursorCreatedAt}:${cursorId}` : "head";
+//   const videoPart = videoId || "feed";
+//   return `reels:feed:${userId}:${videoPart}:${cursorPart}:${limit}`;
+// }
+function buildCacheKey(userId, cursorCreatedAt, cursorId, limit, videoId, start = 1) {
+  const cursorPart = cursorCreatedAt && cursorId 
+    ? `${cursorCreatedAt}:${cursorId}` 
+    : `page:${start || 1}`;
   const videoPart = videoId || "feed";
   return `reels:feed:${userId}:${videoPart}:${cursorPart}:${limit}`;
 }
+
 
 function pruneLocalCache() {
   if (localCache.size <= MAX_LOCAL_ENTRIES) return;
@@ -147,6 +155,29 @@ async function set(key, payload, ttlMs = DEFAULT_TTL_MS) {
   pruneLocalCache();
 }
 
+// async function getCachedFeedPage(params) {
+//   const key = buildCacheKey(
+//     params.userId,
+//     params.cursorCreatedAt,
+//     params.cursorId,
+//     params.limit,
+//     params.videoId,
+//   );
+//   return get(key);
+// }
+
+// async function setCachedFeedPage(params, payload, ttlMs = DEFAULT_TTL_MS) {
+//   if (params.videoId) return;
+//   const key = buildCacheKey(
+//     params.userId,
+//     params.cursorCreatedAt,
+//     params.cursorId,
+//     params.limit,
+//     params.videoId,
+//   );
+//   await set(key, payload, ttlMs);
+// }
+
 async function getCachedFeedPage(params) {
   const key = buildCacheKey(
     params.userId,
@@ -154,6 +185,7 @@ async function getCachedFeedPage(params) {
     params.cursorId,
     params.limit,
     params.videoId,
+    params.start,
   );
   return get(key);
 }
@@ -166,6 +198,7 @@ async function setCachedFeedPage(params, payload, ttlMs = DEFAULT_TTL_MS) {
     params.cursorId,
     params.limit,
     params.videoId,
+    params.start,
   );
   await set(key, payload, ttlMs);
 }

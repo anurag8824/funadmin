@@ -157,13 +157,22 @@ async function fetchReelsFeedLite({
   const requestedVideoId =
     videoId && mongoose.Types.ObjectId.isValid(videoId) ? new mongoose.Types.ObjectId(videoId) : null;
 
-  const cacheParams = {
+  // const cacheParams = {
+  //   userId: String(userId),
+  //   limit: parsedLimit,
+  //   cursorCreatedAt: cursorDate ? cursorDate.toISOString() : null,
+  //   cursorId: cursorObjectId ? String(cursorObjectId) : null,
+  //   videoId: requestedVideoId ? String(requestedVideoId) : null,
+  // };
+    const cacheParams = {
     userId: String(userId),
     limit: parsedLimit,
+    start: parsedStart,
     cursorCreatedAt: cursorDate ? cursorDate.toISOString() : null,
     cursorId: cursorObjectId ? String(cursorObjectId) : null,
     videoId: requestedVideoId ? String(requestedVideoId) : null,
   };
+
 
   if (useCache && !requestedVideoId) {
     const cached = await getCachedFeedPage(cacheParams);
