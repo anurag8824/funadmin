@@ -14,10 +14,10 @@ module.exports = {
   },
   "android": {
     "google": {
-      "appId": "ca-app-pub-7177795034518472~3347511713",
-      "banner": "ca-app-pub-7177795034518472/6300978111",
-      "interstitial": "ca-app-pub-7177795034518472/1033173712",
-      "native": "ca-app-pub-7177795034518472/2247696110"
+      "appId": "ca-app-pub-7177795034518472~7162272315",
+      "banner": "ca-app-pub-7177795034518472/2773010671",
+      "interstitial": "ca-app-pub-7177795034518472/7956115242",
+      "native": "ca-app-pub-7177795034518472/5138218513"
     }
   },
   "ios": {
@@ -70,7 +70,7 @@ module.exports = {
   "sightengineSecret": "sightengineSecret",
   "sightengineUser": "sightengineUser",
   "loginBonus": 5000,
-  "adDisplayIndex": 3,
+  "adDisplayIndex": 10,
   "flutterWaveId": "FLWPUBK_TEST-cdc51a4df113a91fe33a914eaf8d1c75-X",
   "flutterWaveSwitch": false,
   "isChatAdEnabled": true,

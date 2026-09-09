@@ -130,7 +130,12 @@ exports.updateSetting = async (req, res) => {
     setting.videoBanned = req.body.videoBanned ? req.body.videoBanned.toString().split(",") : setting.videoBanned;
     setting.postBanned = req.body.postBanned ? req.body.postBanned.toString().split(",") : setting.postBanned;
 
-    setting.adDisplayIndex = req.body.adDisplayIndex ? Number(req.body.adDisplayIndex) : setting.adDisplayIndex;
+    if (req.body.adDisplayIndex !== undefined && req.body.adDisplayIndex !== null && req.body.adDisplayIndex !== "") {
+      const idx = Number(req.body.adDisplayIndex);
+      setting.adDisplayIndex = (!idx || idx <= 0) ? 10 : Math.max(5, idx);
+    } else if (!setting.adDisplayIndex || setting.adDisplayIndex <= 0) {
+      setting.adDisplayIndex = 10;
+    }
     if (req.body.androidMinVersionCode !== undefined && req.body.androidMinVersionCode !== null && req.body.androidMinVersionCode !== "") {
       setting.androidMinVersionCode = parseInt(req.body.androidMinVersionCode, 10) || 0;
     }
@@ -453,7 +458,7 @@ exports.updateProfilePictureCollection = async (req, res) => {
 
     updateSettingFile(setting);
   } catch (error) {
-    console.error("❌ Error in updateProfilePictureCollection:", error);
+    console.error("Error in updateProfilePictureCollection:", error);
     return res.status(500).json({ status: false, error: error.message || "Internal Server Error" });
   }
 };

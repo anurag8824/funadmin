@@ -92,7 +92,7 @@ const settingSchema = new mongoose.Schema(
     awsRegion: { type: String, default: "" },
 
     //Advertisement setting
-    adDisplayIndex: { type: Number, default: 0 }, //it represents the index at which ads should be displayed
+    adDisplayIndex: { type: Number, default: 10 }, //it represents the index at which ads should be displayed
 
     isVideoAdEnabled: { type: Boolean, default: false },
     isFeedAdEnabled: { type: Boolean, default: false },
