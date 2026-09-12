@@ -38,6 +38,7 @@ const save = require("./save.route");
 const audioCall = require("./audioCall.route");
 const note = require("./note.route");
 const draft = require("./draft.route");
+const ads = require("./ads.route");
 
 //exports client's route.js
 route.use("/user", user);
@@ -76,5 +77,6 @@ route.use("/save", save);
 route.use("/audioCall", audioCall);
 route.use("/note", note);
 route.use("/draft", draft);
+route.use("/ads", ads);
 
 module.exports = route;

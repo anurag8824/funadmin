@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "test:ads": "node scripts/ads/planService.test.js && node scripts/ads/eventService.test.js",
+    "loadtest:ads": "node scripts/adPlanLoadTest.js",
     "start": "nodemon index.js",
     "start:reels-worker": "node workers/reelsProcessor.worker.js"
   },
@@ -46,6 +48,7 @@
     "multer-s3": "^2.10.0",
     "node-cron": "^3.0.3",
     "nodemon": "^3.0.2",
+    "redis": "^6.2.1",
     "resend": "^4.6.0",
     "sightengine": "^1.3.1",
     "socket.io": "^4.7.3",

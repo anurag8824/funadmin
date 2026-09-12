@@ -7,6 +7,7 @@ import PaymentSetting from "@/component/setting/PaymentSetting";
 import WithdrawSetting from "@/component/setting/WithdrawSetting";
 import ReportReasonSetting from "@/component/setting/ReportReasonSetting";
 import AdSetting from "@/component/setting/AdSetting";
+import AdsManager from "@/component/ads/AdsManager";
 import StorageSettingPage from "@/component/setting/StorageSettingPage";
 import UpdateProfilePictureCollection from "@/component/setting/updateProfilePictureCollection";
 import ForceUpdateSetting from "@/component/setting/ForceUpdateSetting";
@@ -28,6 +29,7 @@ const SettingPage = () => {
                 "Setting",
                 "Force Update",
                 "Ads Setting",
+                "Ads Manager",
                 "Storage Setting",
                 "Payment Setting",
                 "Report Reason",
@@ -40,6 +42,7 @@ const SettingPage = () => {
           {multiButtonSelect == "Setting" && <AppSetting />}
           {multiButtonSelect == "Force Update" && <ForceUpdateSetting />}
           {multiButtonSelect == "Ads Setting" && <AdSetting />}
+          {multiButtonSelect == "Ads Manager" && <AdsManager />}
           {multiButtonSelect == "Payment Setting" && <PaymentSetting />}
           {multiButtonSelect == "Withdraw Setting" && <WithdrawSetting />}
           {multiButtonSelect == "Report Reason" && <ReportReasonSetting />}

@@ -116,6 +116,11 @@ console.log("✅ Socket handlers registered");
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Ad frequency caps degrade to per-instance counters when this fails, so it never blocks boot.
+require("./services/ads/adCounterStore")
+  .initRedis()
+  .catch((err) => console.warn("[ADS_COUNTERS] init failed:", err.message));
+
 server.listen(process?.env.PORT, () => {
   console.log("Hello World ! listening on " + process?.env?.PORT);
 });
