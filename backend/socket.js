@@ -24,6 +24,9 @@ const mongoose = require("mongoose");
 //generateHistoryUniqueId
 const { generateHistoryUniqueId } = require("./util/generateHistoryUniqueId");
 
+//1:1 audio call signaling relay
+const { registerCallSignaling } = require("./util/callSignaling");
+
 io.on("connection", async (socket) => {
   console.log("Socket Connection done Client ID: ", socket.id);
   console.log("socket.connected:           ", socket.connected);
@@ -51,6 +54,9 @@ io.on("connection", async (socket) => {
       await User.findByIdAndUpdate(user._id, { $set: { isOnline: true } }, { new: true });
     }
   }
+
+  //1:1 audio call signaling — relays SDP/ICE over this same socket and globalRoom addressing
+  registerCallSignaling(io, socket, id);
 
   //chat
   socket.on("message", async (data) => {

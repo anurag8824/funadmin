@@ -35,6 +35,19 @@ const settingSchema = new mongoose.Schema(
 
     profilePictureCollection: { type: Array, default: [] },
 
+    /**
+     * ICE servers for 1:1 audio calls, sent to clients via /client/setting/getSetting so TURN
+     * credentials can be rotated or added without shipping an app release.
+     *
+     * Entries: { urls: String, username?: String, credential?: String }. The STUN default below
+     * is enough for same-network and friendly-NAT calls; add a TURN entry before relying on
+     * calls over mobile data, where carrier CGNAT defeats STUN-only candidates.
+     */
+    iceServers: {
+      type: Array,
+      default: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+    },
+
     durationOfShorts: { type: Number, default: 0 }, //that value always save in seconds
     minCoinForCashOut: { type: Number, default: 0 }, //min coin requried for convert coin to default currency i.e., 1000 coin = 1 $
     loginBonus: { type: Number, default: 5000 },
